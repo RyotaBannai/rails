@@ -16,5 +16,6 @@ package-lock.json
 pkg/
 tmp/
 log/
+playground/starter_app/db/test.*
 /yarn-error.log
 /test-reports/
