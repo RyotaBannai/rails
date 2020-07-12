@@ -14,6 +14,7 @@ debug.log
 node_modules/
 package-lock.json
 pkg/
-/tmp/
+tmp/
+log/
 /yarn-error.log
 /test-reports/
