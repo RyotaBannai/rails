@@ -25,7 +25,7 @@ rails test : rails t
 bundle install : bundle
 ```
 
-- 誤って rails generate してしまったときは `destroy` を使う。 モデルの生成あとなどもこれで元に戻すことができる。
+- 誤って rails generate してしまったときは `destroy` を使う。 モデルの生成後などもこれで元に戻すことができる。
 
 ```text
 rails generate controller StaticPages home help
@@ -65,7 +65,7 @@ rails db:migrate VERSION=0 # 最初の状態に戻したいとき　初期の状
 
 ### ヘルパー
 
-#### Controller
+#### Controller/ View
 
 - `render` メソッドは非常に単純なハッシュを引数に取ります。ハッシュのキーは`:plain`、ハッシュの値は `params[:article].inspect` です。`params` **メソッド**は、フォームから送信されてきたパラメータ (つまりフォームのフィールド) を表すオブジェクトです。`params` メソッドは `ActionController::Parameters` オブジェクトを返します。文字列またはシンボルを使って、このオブジェクトのハッシュのキーを指定できます。
 - production (本番) 環境など、development 以外の環境に対してもマイグレーションを実行したい場合は、`rails db:migrate RAILS_ENV=production` のように環境変数を明示的に指定する必要があり
@@ -76,3 +76,91 @@ rails db:migrate VERSION=0 # 最初の状態に戻したいとき　初期の状
 - `pluralize`: 数値を受け取ってそれに応じて英語の「単数形/複数形」活用を行ってくれる Rails のヘルパーメソッド。数値が 1 より大きい場合は、引数の文字列を自動的に複数形に変更する。
 - `scope: :article`のようにスコープにシンボルを指定すると、フィールドが空の状態で作成される。
 - `パーシャルのファイル名`の先頭には`アンダースコア`を追加. (パーシャルファイルはフォームなど layout として使い回しができるファイルのことを言う)
+- `article_path(@article)ヘルパー` → article id = XX の詳細画面へのパスを作成。
+
+#### Model
+
+- `モデル`のクラス名が 2 語以上の複合語である場合、Ruby の慣習であるキャメルケース(CamelCase のように語頭を大文字にしてスペースなしでつなぐ)に従う。 (例: BookClub) 一方、`テーブル名/ スキーマ名`は(camel_case などのように)小文字かつアンダースコアで区切られなければならない。(例: book_clubs)
+- `外部キー`: このカラムはテーブル名の単数形`_id` にする必要がある（例: item_id、order_id）
+- type: モデルで Single Table Inheritance を使う場合に指定
+- `関連付け名_type`: ポリモーフィック関連付けの種類を保存
+- `テーブル名_count`: 関連付けにおいて、所属しているオブジェクトの数をキャッシュするのに使われる。たとえば、`Article` クラスに `comments_count` というカラムがあり、そこに `Comment` のインスタンスが多数あると、ポストごとのコメント数がここにキャッシュされる。
+- `reversible`: マイグレーションを逆方向に実行 (ロールバック) する方法が推測できない場合に使う
+
+```ruby
+class ChangeProductsPrice < ActiveRecord::Migration[5.0]
+  def change
+    reversible do |dir|
+      change_table :products do |t|
+        dir.up { t.change :price, :string }
+        dir.down { t.change :price, :integer }
+      end
+    end
+  end
+end
+```
+
+- change の代りに up と down がある. 処理が複雑なときは 変更前後をわけて記述すると良い。
+
+```ruby
+class ChangeProductsPrice < ActiveRecord::Migration[5.0]
+  def up
+    change_table :products do |t|
+      t.change :price, :string
+    end
+  end
+
+  def down
+    change_table :products do |t|
+      t.change :price, :integer
+    end
+  end
+end
+```
+
+- マイグレーション名が `AddColumnToTable` や `RemoveColumnFromTable` で、かつその後ろにカラム名や型が続く形式になっていれば、適切な `add_column` 文や `remove_column` 文を含むマイグレーションが作成される。
+- 例：`rails generate migration AddPartNumberToProducts part_number:string`
+
+```ruby
+class AddPartNumberToProducts < ActiveRecord::Migration[5.0]
+  def change
+    add_column :products, :part_number, :string
+  end
+end
+```
+
+- マイグレーション名が`CreateXXX`のような形式であり、その後にカラム名と種類が続く場合、XXX という名前のテーブルが作成され、指定の種類のカラム名がその中に生成される。
+- Add new column or option to the existing table:
+  1. `rails generate migration add_role_to_user role:number`
+  2. `rake db:migrate`
+- カラムに変更を加える
+- → description と name カラムを削除し、string カラムである part_number が作成されてインデックスをそこに追加。そして最後に upccode カラムをリネームする。
+
+```ruby
+change_table :products do |t|
+  t.remove :description, :name
+  t.string :part_number
+  t.index :part_number
+  t.rename :upccode, :upc_code
+end
+```
+
+- change_column:
+- → products テーブルの:name フィールドに NOT NULL 制約を設定し、:approved フィールドのデフォルト値を true から false に変更
+
+```ruby
+change_column_null :products, :name, false
+change_column_default :products, :approved, from: true, to: false
+```
+
+- `外部キー`
+- → 新たな外部キー を articles テーブルの author_id カラムに追加。このキーは authors テーブルの id カラムを参照する。欲しいカラム名をテーブル名から類推できない場合は、`:column` オプションと`:primary_key` オプションを使う。
+
+```ruby
+add_foreign_key :articles, :authors
+```
+
+- Active Record では単一カラムの外部キーのみがサポートされている。複合外部キーを使う場合は execute と structure.sql が必要。
+- [`ブロックで change、change_default、remove が呼び出されない限り、change_table もロールバック可能`](https://railsguides.jp/active_record_migrations.html#change%E3%83%A1%E3%82%BD%E3%83%83%E3%83%89%E3%82%92%E4%BD%BF%E3%81%86)
+- `reverse` で rollback 機能をそのまま活用することができる。
+- `migrate`: 基本的にこれまで実行されたことのない`change`または`up`メソッドを実行
