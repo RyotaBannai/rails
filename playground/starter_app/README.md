@@ -180,3 +180,111 @@ add_foreign_key :articles, :authors
   > Active Record は、「知的に振る舞うのはモデルであり、データベースではない」というコンセプトに基づいている
 - モデルに関連付けの:dependent オプションを指定すると、親オブジェクトが削除されたときに子オブジェクトも自動的に削除
   > `古いマイグレーション`: db/schema.rb や db/structure.sql は、使っているデータベースの最新ステートのスナップショットであり、そのデータベースを再構築するための情報源として信頼できます。このことを頼りにして、古いマイグレーションファイルを削除できます。db/migrate/ディレクトリ内のマイグレーションファイルを削除しても、マイグレーションファイルが存在していたときに rails db:migrate が実行されたあらゆる環境は、Rails 内部の `schema_migrations` という名前のデータベース内に保存されている（マイグレーションファイル固有の）`マイグレーションタイムスタンプへの参照を保持`し続けます。このテーブルは、`特定の環境でマイグレーションが実行されたことがあるかどうかをトラッキングする`のに用いられます。マイグレーションファイルを削除した状態で `rails db:migrate:status` コマンド（本来マイグレーションのステータス（up または down）を表示する）を実行すると、削除したマイグレーションファイルの後に`********** NO FILE **********`と表示されるでしょう。これは、そのマイグレーションファイルが特定の環境で一度実行されたが、db/migrate/ディレクトリの下に見当たらない場合に表示されます。
+
+#### validation
+
+- メソッドには、バリデーションをトリガするものと、しないものがある。この点に注意しておかないと、バリデーションが設定されているにもかかわらず、データベース上のオブジェクトが無効な状態になってしまう可能性がある。
+- バリデーションのトリガが発生するもの：`create create! save save! update update!` `!`が末尾に付く`破壊的メソッド`(save!など)では、レコードが無効な場合に例外が発生。 `非破壊的なメソッド`は、無効な場合に例外を発生しない。`save と update` は無効な場合に `false` を返し、`create` は無効な場合に単にその`オブジェクトを返す`。
+- `バリデーションのスキップ`: 次のメソッドはバリデーションを行わずにスキップする。オブジェクトの保存は、有効無効にかかわらず行われる。`decrement! decrement_counter increment! increment_counter toggle! touch update_all update_attribute update_column update_columns update_counters` 実は、save に `validate: false` を引数として与えると、save のバリデーションをスキップできてしまう。
+- Rails は、Active Record オブジェクトを保存する`直前に`バリデーションを実行。バリデーションで何らかのエラーが発生すると、オブジェクトを保存しない。 `valid?`メソッドを使って、バリデーションを手動でトリガすることもできる。`valid?`を実行するとバリデーションがトリガされ、オブジェクトにエラーがない場合は `true` が返され、そうでなければ `false`が返される。
+- バリデーション後、または valid? 後 `p.errors.messages` でエラーメッセージにアクセスできる。`Person.create.errors[:name].any? # => true`
+- `acceptance`: フォームが送信されたときにユーザーインターフェイス上のチェックボックスがオンになっているかどうかを検証. `validates :terms_of_service, acceptance: { message: 'must be abided' }` :accept オプションも渡せる。このオプションは、「同意済み（accepted）」とみなす値を指定します。デフォルトは"1"ですが、変更は簡単. `validates :eula, acceptance: { accept: ['TRUE', 'accepted'] }`
+- `validates_associated` を関連付けの両側のオブジェクトで実行しない。 関連付けの両側でこのヘルパーを使うと無限ループになる。
+- `confirmation`: 2 つのテキストフィールドで受け取る内容が完全に一致する必要がある場合に使う。:case_sensitive オプションを用いて、大文字小文字の違いを確認する制約をかけるかどうかも定義できる。
+- `exclusion`: 与えられた集合に属性の値が「含まれていない」ことを検証。集合には任意の enumerable オブジェクトが使える。`validates :subdomain, exclusion: { in: %w(www us ca jp), message: "%{value}は予約済みです" }` 逆は　`inclusion`
+- `format`: with オプションで与えられた正規表現と属性の値がマッチするかどうかのテストによる検証. `validates :legacy_code, format: { with: /\A[a-zA-Z]+\z/, message: "英文字のみが使えます" }`
+- `length`: 属性の値の長さを検証. `maximum, minimum, in, is` オプションがある。`:wrong_length、:too_long、:too_short` オプションがある。メッセージの単数複数には気を付ける。
+- `numericality`: equal, greater_than, とか諸々ある。
+- 関連付けられたレコードの存在が必須の場合、これを検証するには`:inverse_of` オプションでその関連付けを指定する必要がある。`has_many :line_items, inverse_of: :order`. `presence` の反対は `absence`
+  > has_one または has_many リレーションシップを経由して関連付けられたオブジェクトが存在することを検証すると、blank?でもなく marked_for_destruction?(削除用マーク済み)でもないかどうかがチェックされます
+- false.blank?は常に true なので、真偽値に対してこのメソッドを使うと正しい結果が得られない。真偽値の存在をチェックしたい場合は、`validates :field_name, inclusion: { in: [true, false] }`を使う必要がある。`validates :boolean_field_name, exclusion: { in: [nil] }`
+- uniqueness: たまたま 2 つのデータベース接続によって同じ値を持つレコードが 2 つ作成される可能性があり、これを防ぐために使える。一意性チェックの範囲を限定する別の属性を指定する:scope オプションがある。`validates :name, uniqueness: { scope: :year, message: "発生は年に1度までである必要があります" }` `:case_sensitive` オプションもある。
+- `validates_with`: バリデーション専用の別クラスにレコードを渡す!!!
+
+```ruby
+class GoodnessValidator < ActiveModel::Validator
+  def validate(record)
+    if record.first_name == "Evil"
+      record.errors[:base] << "これは悪人だ"
+    end
+  end
+end
+
+class Person < ApplicationRecord
+  validates_with GoodnessValidator
+end
+```
+
+- or
+
+```ruby
+class GoodnessValidator < ActiveModel::Validator
+  def validate(record)
+    if options[:fields].any?{|field| record.send(field) == "Evil" }
+      record.errors[:base] << "これは悪人だ"
+    end
+  end
+end
+
+class Person < ApplicationRecord
+  validates_with GoodnessValidator, fields: [:first_name, :last_name]
+end
+```
+
+- わりに素の Ruby オブジェクトを使うこともできる。
+
+```ruby
+class Person < ApplicationRecord
+  validate do |person|
+    GoodnessValidator.new(person).validate
+  end
+end
+
+class GoodnessValidator
+  def initialize(person)
+    @person = person
+  end
+
+  def validate
+    if some_complex_condition_involving_ivars_and_private_methods?
+      @person.errors[:base] << "これは悪人だ"
+    end
+  end
+
+  # ...
+end
+```
+
+- `:allow_nil`: 対象の値が nil の場合にバリデーションをスキップ
+- `:allow_blank`: 属性の値が blank?に該当する場合（nil や空文字など）にバリデーションがパス
+- `:message`: 値には、`%{value}や%{attribute}や%{model}`をオプションで含められます。
+- `:on` オプションは、バリデーション実行のタイミングを指定する。ビルトインのバリデーションヘルパーは、デフォルトでは`保存時`（`レコードの作成時および更新時の両方`）に実行される。バリデーションのタイミングを変更したい場合、on: :create を指定すればレコード新規作成時にのみ検証が行われ、on: :update を指定すればレコードの更新時にのみ検証が行われる。
+#### 条件付きバリデーション
+```ruby
+class Order < ApplicationRecord
+  validates :card_number, presence: true, if: :paid_with_card?
+
+  def paid_with_card?
+    payment_type == "card"
+  end
+end
+```
+- proc を使った場合
+```ruby
+class Account < ApplicationRecord
+  validates :password, confirmation: true,
+    unless: Proc.new { |a| a.password.blank? }
+end
+```
+- バリデーションをグループ化
+```ruby
+class User < ApplicationRecord
+  with_options if: :is_admin? do |admin|
+    admin.validates :password, length: { minimum: 10 }
+    admin.validates :email, presence: true
+  end
+end
+```
+##### error message
+- `errors[:base]`: 個別の属性に関連するエラーメッセージを追加する代りに、オブジェクトの状態全体に関連するエラーメッセージを追加することもできる。
+- `errors.size`: エラーメッセージの総数
