@@ -1,3 +1,16 @@
+<!-- TOC -->
+
+- [Many things..](#many-things)
+- [Controller/ View](#controller-view)
+- [Model](#model)
+- [validation](#validation)
+  - [条件付きバリデーション](#条件付きバリデーション)
+  - [error message](#error-message)
+- [callback](#callback)
+  - [コールバックをスキップ](#コールバックをスキップ)
+
+<!-- /TOC -->
+
 #### Many things..
 
 - Hashes are indexed using the square brackets (`[]`) and accessing either the `string literal` you used for the key, or the `symbol`.
@@ -63,7 +76,22 @@ rails db:migrate VERSION=0 # 最初の状態に戻したいとき　初期の状
 
 - このサンプルアプリは生まれたてなので、今のところリファクタリングの必要な箇所はほぼどこにも見当たりません。しかし`「一匹いれば 30 匹いると思え」`、[コードの腐敗臭](https://ja.wikipedia.org/wiki/%E3%82%B3%E3%83%BC%E3%83%89%E3%81%AE%E8%87%AD%E3%81%84)はどんな小さな隙間からも忍び寄ってきます。こまめなリファクタリングの習慣をできるだけ早いうちに身につけるためにも、少々無理やりに 3.4.3 から始めることにします。
 
-### ヘルパー
+- レコードの保存時に#save メソッドのオプションに`touch: false`を渡すことで、タイムスタンプを更新しないようにできる。`article.save!(touch: false)` `after_touch` コールバックは、Active Record オブジェクトが touch されるたびに呼び出される。belongs_to と併用できる。
+- `ActiveRecord::Relation#in_batches`: データ件数が大きなモデルに対して処理を行う`ActiveRecord#find_in_batches`がブロックに配列を渡してレコードを渡すのに対して、`ActiveRecord#in_batches`メソッドは、ブロックに`ActiveRecord::Relation`を渡せる。オプションに`of`を渡すことで、バッチのサイズを変更することができる。
+- `ActiveRecord::Attributes`: モデルの`attribute`で属性を指定することで、モデルの属性を SQL で取得したり、`ActiveRecord::Relation`の where メソッドに渡したりする方法をカスタマイズできる.
+
+```ruby
+create_table :store_listings, force: true do |t|
+  t.decimal :price_in_cents
+end
+class StoreListing < ActiveRecord::Base
+  attribute :price_in_cents, :integer
+end
+```
+
+- `Sprockets 3`のサポート: Rails 5 では`app/assets/config/`ディレクトリ内の`manifest.js`で指定
+- `Turbolinks 5`: `data-turbolinks-permanent`を DOM 要素につけることでページ間で保持されるようになり、状態の初期化を必要としないので、より高速に動作する. サイドバーなど、ページ間で固定の要素の場合は、`data-turbolinks-permanent`を付与し、ページ間で保持しない要素は、`data-turbolinks-temporary`をつけると良い
+- `Rails API`: `ActionController::Base`の代わりに`ActionController::API`をコントローラで継承することによって、JSON API サーバー用の軽量な Rails アプリケーションを構築することができる。
 
 #### Controller/ View
 
@@ -259,24 +287,30 @@ end
 - `:allow_blank`: 属性の値が blank?に該当する場合（nil や空文字など）にバリデーションがパス
 - `:message`: 値には、`%{value}や%{attribute}や%{model}`をオプションで含められます。
 - `:on` オプションは、バリデーション実行のタイミングを指定する。ビルトインのバリデーションヘルパーは、デフォルトでは`保存時`（`レコードの作成時および更新時の両方`）に実行される。バリデーションのタイミングを変更したい場合、on: :create を指定すればレコード新規作成時にのみ検証が行われ、on: :update を指定すればレコードの更新時にのみ検証が行われる。
-#### 条件付きバリデーション
+
+##### 条件付きバリデーション
+
 ```ruby
 class Order < ApplicationRecord
   validates :card_number, presence: true, if: :paid_with_card?
 
   def paid_with_card?
-    payment_type == "card"
+    payment_type == 'card'
   end
 end
 ```
+
 - proc を使った場合
+
 ```ruby
 class Account < ApplicationRecord
-  validates :password, confirmation: true,
-    unless: Proc.new { |a| a.password.blank? }
+  validates :password,
+            confirmation: true, unless: Proc.new { |a| a.password.blank? }
 end
 ```
+
 - バリデーションをグループ化
+
 ```ruby
 class User < ApplicationRecord
   with_options if: :is_admin? do |admin|
@@ -285,6 +319,17 @@ class User < ApplicationRecord
   end
 end
 ```
+
 ##### error message
+
 - `errors[:base]`: 個別の属性に関連するエラーメッセージを追加する代りに、オブジェクトの状態全体に関連するエラーメッセージを追加することもできる。
 - `errors.size`: エラーメッセージの総数
+
+#### callback
+
+> after_save コールバックは作成と更新の両方で呼び出されますが、コールバックマクロの呼び出し順にかかわらず、必ず、より詳細な after_create コールバックや after_update コールバックより 後 に呼び出されます。
+> before_destroy コールバックは、dependent: :destroy よりも前に配置する（または prepend: true オプションを用いる）べきです
+
+##### コールバックをスキップ
+
+- 検証(validation)の場合と同様、以下のメソッドでコールバックをスキップできる。`decrement! decrement_counter delete delete_all increment! increment_counter update_column update_columns update_all update_counters`

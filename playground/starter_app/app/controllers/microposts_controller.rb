@@ -60,7 +60,7 @@ class MicropostsController < ApplicationController
   # DELETE /microposts/1
   # DELETE /microposts/1.json
   def destroy
-    @micropost.comments.find(params[:id]).destroy # delete comments when article deleted
+    # @micropost.comments.find(params[:id]).destroy # delete comments when article deleted # should use dependent: :destroy in model 
     @micropost.destroy
     respond_to do |format|
       format.html do
