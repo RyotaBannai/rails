@@ -19,6 +19,7 @@
         - [結合](#結合)
         - [スコープ](#スコープ)
         - [Other things](#other-things)
+    - [Connect multiple dbs](#connect-multiple-dbs)
 
 <!-- /TOC -->
 
@@ -683,3 +684,17 @@ Client.pluck(:name)
 ```
 - `many?` :Returns true if there is more than one record.
 - リレーションによってトリガされるクエリでEXPLAINを実行することができる。 `User.where(id: 1).joins(:articles).explain`
+
+#### Connect multiple dbs
+- [複数の DB を使う](https://tech.dely.jp/entry/rails6_multiple_db#%E8%A4%87%E6%95%B0%E3%83%87%E3%83%BC%E3%82%BF%E3%83%99%E3%83%BC%E3%82%B9%E3%81%AE%E4%BB%95%E7%B5%84%E3%81%BF)
+- 現時点でサポートされている機能：
+  1. 複数の「primary」データベースと、それぞれに対応する1つの「replica」
+  2. モデルでのコネクション自動切り替え
+  3. HTTP verbや直近の書き込みに応じた primary と replica の自動スワップ
+  4. マルチプルデータベースの作成、削除、マイグレーション、やりとりを行うRailsタスク
+   
+- サポートされていない機能：
+  1. シャーディング（sharding）
+  2. クラスタを越える JOIN
+  3. replica のロードバランシング
+  4. マルチプルデータベースのスキーマキャッシュのダンプ
