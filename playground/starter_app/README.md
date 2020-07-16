@@ -1,13 +1,19 @@
+### TOC
+
 <!-- TOC -->
 
-- [Many things..](#many-things)
+- [TOC](#toc)
+    - [Many things..](#many-things)
 - [Controller/ View](#controller-view)
 - [Model](#model)
-- [validation](#validation)
-  - [条件付きバリデーション](#条件付きバリデーション)
-  - [error message](#error-message)
-- [callback](#callback)
-  - [コールバックをスキップ](#コールバックをスキップ)
+    - [validation](#validation)
+        - [条件付きバリデーション](#条件付きバリデーション)
+        - [error message](#error-message)
+    - [callback](#callback)
+        - [コールバックをスキップ](#コールバックをスキップ)
+    - [Association](#association)
+    - [ヒントと注意事項](#ヒントと注意事項)
+        - [関連付けの詳細情報](#関連付けの詳細情報)
 
 <!-- /TOC -->
 
@@ -93,7 +99,7 @@ end
 - `Turbolinks 5`: `data-turbolinks-permanent`を DOM 要素につけることでページ間で保持されるようになり、状態の初期化を必要としないので、より高速に動作する. サイドバーなど、ページ間で固定の要素の場合は、`data-turbolinks-permanent`を付与し、ページ間で保持しない要素は、`data-turbolinks-temporary`をつけると良い
 - `Rails API`: `ActionController::Base`の代わりに`ActionController::API`をコントローラで継承することによって、JSON API サーバー用の軽量な Rails アプリケーションを構築することができる。
 
-#### Controller/ View
+### Controller/ View
 
 - `render` メソッドは非常に単純なハッシュを引数に取ります。ハッシュのキーは`:plain`、ハッシュの値は `params[:article].inspect` です。`params` **メソッド**は、フォームから送信されてきたパラメータ (つまりフォームのフィールド) を表すオブジェクトです。`params` メソッドは `ActionController::Parameters` オブジェクトを返します。文字列またはシンボルを使って、このオブジェクトのハッシュのキーを指定できます。
 - production (本番) 環境など、development 以外の環境に対してもマイグレーションを実行したい場合は、`rails db:migrate RAILS_ENV=production` のように環境変数を明示的に指定する必要があり
@@ -106,7 +112,7 @@ end
 - `パーシャルのファイル名`の先頭には`アンダースコア`を追加. (パーシャルファイルはフォームなど layout として使い回しができるファイルのことを言う)
 - `article_path(@article)ヘルパー` → article id = XX の詳細画面へのパスを作成。
 
-#### Model
+### Model
 
 - `モデル`のクラス名が 2 語以上の複合語である場合、Ruby の慣習であるキャメルケース(CamelCase のように語頭を大文字にしてスペースなしでつなぐ)に従う。 (例: BookClub) 一方、`テーブル名/ スキーマ名`は(camel_case などのように)小文字かつアンダースコアで区切られなければならない。(例: book_clubs)
 - `外部キー`: このカラムはテーブル名の単数形`_id` にする必要がある（例: item_id、order_id）
@@ -333,3 +339,154 @@ end
 ##### コールバックをスキップ
 
 - 検証(validation)の場合と同様、以下のメソッドでコールバックをスキップできる。`decrement! decrement_counter delete delete_all increment! increment_counter update_column update_columns update_all update_counters`
+
+#### Association
+
+- 関連付けされた先のモデルの作成 → `@book = @author.books.create(published_at: Time.now)` → author_id は自動挿入される。
+- `has_one`: その意味と結果は `belongs_to` とは若干異なる。`has_one` 関連付けの場合は、`その宣言が行われているモデルのインスタンスが、他方のモデルのインスタンスを「まるごと含んでいる」または「所有している」こと`を示している。たとえば、`供給者(supplier)1人につきアカウント(account)を1つだけ持つ`という関係がある。
+- `has_one_through`: 2 つのモデルの間に「第 3 のモデル」(join モデル)が介在する。1 人の提供者(supplier)が 1 つのアカウントに関連付けられ、さらに 1 つのアカウントが 1 つのアカウント履歴に関連付けられる場合
+- `has_many_through`: 2 つのモデルの間に「第 3 のモデル」(join モデル)が介在する。患者(patient)が医師(physician)との診察予約(appointment)を取る医療業務
+- `has_and_belongs_to_many`: 「第 3 のモデル」(join モデル)が介在しない。アプリケーションに完成品(assembly)と部品(part)があり、1 つの完成品に多数の部品が対応し、逆に 1 つの部品にも多くの完成品が対応する場合。
+- `belongs_toとhas_oneのどちらを選ぶか?`:2 つのモデルの間に 1 対 1 の関係を作りたいのであれば、いずれか一方のモデルに belongs_to を追加し、もう一方のモデルに has_one を追加する必要がある。区別の決め手となるのは外部キー(foreign key)をどちらに置くか(外部キーは、belongs_to を追加した方のモデルのテーブルに追加される)。
+- マイグレーションで t.bigint :supplier_id のように「小文字のモデル名\_id」と書くと、外部キーを明示的に指定できる。現在のバージョンの Rails では、同じことを `t.references :supplier` という方法で記述できる。こちらの方が実装の詳細が抽象化され、隠蔽される。
+- `has_many :throughとhas_and_belongs_to_manyのどちらを選ぶか?` リレーションシップのモデルそれ自体を独立したエンティティとして扱いたい(両モデルの関係そのものについて処理を行いたい)のであれば、中間に join モデルを使う has_many :through リレーションシップを選ぶのが最もシンプル。`リレーションシップのモデルで何か特別なことをする必要がまったくないのであれば`、join モデルの不要な has_and_belongs_to_many リレーションシップを使うのがシンプルです(ただし、こちらの場合は join モデルが不要な代わりに、専用の join テーブルを別途データベースに作成しておく必要があるので、お忘れなきよう)。
+- polymorphic relationship には、`t.references :imageable, polymorphic: true` とすると楽。
+- [`自己結合`](https://railsguides.jp/association_basics.html#%E8%87%AA%E5%B7%B1%E7%B5%90%E5%90%88): 授業員テーブルがあり、manager と subordinates の関連付けをしたい場合。
+
+#### ヒントと注意事項
+
+1. キャッシュ制御: モデルインスタンスを取得した時のデータになるため、他で更新された時のデータより古い物になる可能性がある。→ reload を使用。`author.books.reload.empty?`
+2. 名前衝突の回避: ActiveRecord::Base のインスタンスで既に使われているような名前を関連付けに使うのは禁物。`attributes` や `connection`は関連付けに使ってはならない
+3. スキーマの更新, has_and_belongs_to_many 関連付けに対応する join テーブルを作成: このテーブルはモデルを表さないので、`create_table`に`id: false`を渡す。こうしておかないとこの関連付けは正常に動かない。
+
+```ruby
+class Assembly < ApplicationRecord
+  has_and_belongs_to_many :parts
+end
+
+class Part < ApplicationRecord
+  has_and_belongs_to_many :assemblies
+end
+
+class CreateAssembliesPartsJoinTable < ActiveRecord::Migration[5.0]
+  def change
+    create_table :assemblies_parts, id: false do |t|
+      t.bigint :assembly_id
+      t.bigint :part_id
+    end
+
+    add_index :assemblies_parts, :assembly_id
+    add_index :assemblies_parts, :part_id
+  end
+end
+```
+
+4. 関連付けのスコープ制御: デフォルトでは、関連付けによって探索されるオブジェクトは、現在のモジュールのスコープ内のものだけ。以下の実装はスコープが別なので動かない。
+
+```ruby
+module MyApplication
+  module Business
+    class Supplier < ApplicationRecord
+      has_one :account
+    end
+  end
+
+  module Billing
+    class Account < ApplicationRecord
+      belongs_to :supplier
+    end
+  end
+end
+```
+
+- 次のようにスコープを指定して関連付けを行う。
+
+```ruby
+module MyApplication
+  module Business
+    class Supplier < ApplicationRecord
+      has_one :account, class_name: 'MyApplication::Billing::Account'
+    end
+  end
+
+  module Billing
+    class Account < ApplicationRecord
+      belongs_to :supplier, class_name: 'MyApplication::Business::Supplier'
+    end
+  end
+end
+```
+
+5.  双方向関連付け: Active Record では標準的な名前同士の関連付けのほとんどをサポートしていて、自動的に認識できる。ただ、テーブル名とそのクラス名を指定してるプロパティー名が違う時、例えば、Author テーブルを Book テーブルで writer プロパティとして使いたいときは、自動認識できない。→ `inverse_of` を使う。
+
+```ruby
+class Author < ApplicationRecord
+  has_many :books, inverse_of: 'writer'
+end
+
+class Book < ApplicationRecord
+  belongs_to :writer, class_name: 'Author', foreign_key: 'author_id'
+end
+```
+
+##### 関連付けの詳細情報
+
+- belongs_to 関連付けの詳細: 自動的に利用できる 6 つのメソッド。`association, association=(associate), build_association(attributes = {}), create_association(attributes = {}), create_association!(attributes = {}), reload_association` association の部分はプレースホルダ。`build → 初期化 create → 初期化 + 保存`
+  > 新しく作成した has*one 関連付けまたは belongs_to 関連付けを初期化するには、build*で始まるメソッドを使う必要があります。この場合 has*many 関連付けや has_and_belongs_to_many 関連付けで使われる association.build メソッドは使わないでください。作成するには、create*で始まるメソッドをお使いください。
+  - association=(associate): association=メソッドは、引数のオブジェクトをそのオブジェクトに関連付ける。
+- `:counter_cache` : 従属しているオブジェクトの数の検索効率を向上
+- `:optional`: オプションを true に設定すると、関連付けされたオブジェクトの存在性のバリデーションが実行されないようになる。
+- `belongs_toのスコープ`, `includes`: その関連付けが使われるときに `eager-load` (訳注: `preload`とは異なる)しておきたい第 2 関連付けを指定。
+
+```ruby
+class Chapter < ApplicationRecord
+  belongs_to :book
+end
+
+class Book < ApplicationRecord
+  belongs_to :author
+  has_many :chapters
+end
+
+class Author < ApplicationRecord
+  has_many :books
+end
+```
+
+- chapters から著者名(Author)を@chapter.book.author のように直接取り出す頻度が高い場合は、chapter から book への関連付けを行なう時に Author をあらかじめ includes しておくと、無駄なクエリが減って効率が高まる。
+
+```ruby
+class Chapter < ApplicationRecord
+  belongs_to :book, -> { includes :author }
+end
+```
+
+- `has_many 関連付けにオブジェクトをアサインし`、しかもそのオブジェクトを保存`したくない`場合、`collection.build` メソッドを使う。
+- `関連付けの拡張`: `無名モジュール`( `anonymous module`)を用いる
+
+```ruby
+class Author < ApplicationRecord
+  has_many :books do
+    def find_by_book_prefix(book_number)
+      find_by(category_id: book_number[0..2])
+    end
+  end
+end
+```
+- 名前付きの拡張モジュールを使う場合（拡張をさまざまな関連付けで共有したい）。
+```ruby
+module FindRecentExtension
+  def find_recent
+    where("created_at > ?", 5.days.ago)
+  end
+end
+
+class Author < ApplicationRecord
+  has_many :books, -> { extending FindRecentExtension }
+end
+
+class Supplier < ApplicationRecord
+  has_many :deliveries, -> { extending FindRecentExtension }
+end
+```
+- `シングルテーブル継承 （STI）`: `rails generate model vehicle type:string color:string price:decimal{10.2}` type を必ず指定。これを継承するときは、parent オプションで指定。　`rails generate model car --parent=Vehicle` `Car.all` で自動で type = Car がセットされたクエリーが発行される。
