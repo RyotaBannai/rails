@@ -3,7 +3,7 @@
 <!-- TOC -->
 
 - [TOC](#toc)
-    - [Many things..](#many-things)
+- [Many things..](#many-things)
 - [Controller/ View](#controller-view)
 - [Model](#model)
     - [validation](#validation)
@@ -14,10 +14,15 @@
     - [Association](#association)
     - [ヒントと注意事項](#ヒントと注意事項)
         - [関連付けの詳細情報](#関連付けの詳細情報)
+    - [クエリーインターフェース](#クエリーインターフェース)
+        - [レコードを更新できないようロックする](#レコードを更新できないようロックする)
+        - [結合](#結合)
+        - [スコープ](#スコープ)
+        - [Other things](#other-things)
 
 <!-- /TOC -->
 
-#### Many things..
+### Many things..
 
 - Hashes are indexed using the square brackets (`[]`) and accessing either the `string literal` you used for the key, or the `symbol`.
 
@@ -436,7 +441,7 @@ end
   - association=(associate): association=メソッドは、引数のオブジェクトをそのオブジェクトに関連付ける。
 - `:counter_cache` : 従属しているオブジェクトの数の検索効率を向上
 - `:optional`: オプションを true に設定すると、関連付けされたオブジェクトの存在性のバリデーションが実行されないようになる。
-- `belongs_toのスコープ`, `includes`: その関連付けが使われるときに `eager-load` (訳注: `preload`とは異なる)しておきたい第 2 関連付けを指定。
+- `belongs_toのスコープ`, `includes`: その関連付けが使われるときに `eager-load` (訳注: `preload`とは異なる)しておきたい第 2 関連付けを指定。単純に joins または left_outer_joins を使用して取得しても`関連オブジェクト`も取得できる。
 
 ```ruby
 class Chapter < ApplicationRecord
@@ -453,13 +458,16 @@ class Author < ApplicationRecord
 end
 ```
 
-- chapters から著者名(Author)を@chapter.book.author のように直接取り出す頻度が高い場合は、chapter から book への関連付けを行なう時に Author をあらかじめ includes しておくと、無駄なクエリが減って効率が高まる。
+- chapters から著者名(Author)を `@chapter.book.author` のように直接取り出す頻度が高い場合は、chapter から book への関連付けを行なう時に Author をあらかじめ includes しておくと、無駄なクエリが減って効率が高まる。
 
 ```ruby
 class Chapter < ApplicationRecord
   belongs_to :book, -> { includes :author }
 end
 ```
+
+- `Article.includes(:category, :comments)` → category, comment の他のアソシエーションも取ってくる
+- `Category.includes(articles: [{ comments: :guest }, :tags]).find(1)` → id=1 のカテゴリを検索し、関連付けられたすべての記事とそのタグやコメント、およびすべてのコメントのゲスト関連付けを一括読み込み
 
 - `has_many 関連付けにオブジェクトをアサインし`、しかもそのオブジェクトを保存`したくない`場合、`collection.build` メソッドを使う。
 - `関連付けの拡張`: `無名モジュール`( `anonymous module`)を用いる
@@ -473,11 +481,13 @@ class Author < ApplicationRecord
   end
 end
 ```
+
 - 名前付きの拡張モジュールを使う場合（拡張をさまざまな関連付けで共有したい）。
+
 ```ruby
 module FindRecentExtension
   def find_recent
-    where("created_at > ?", 5.days.ago)
+    where('created_at > ?', 5.days.ago)
   end
 end
 
@@ -489,4 +499,187 @@ class Supplier < ApplicationRecord
   has_many :deliveries, -> { extending FindRecentExtension }
 end
 ```
+
 - `シングルテーブル継承 （STI）`: `rails generate model vehicle type:string color:string price:decimal{10.2}` type を必ず指定。これを継承するときは、parent オプションで指定。　`rails generate model car --parent=Vehicle` `Car.all` で自動で type = Car がセットされたクエリーが発行される。
+
+#### クエリーインターフェース
+
+- 検索メソッドは where や group といったコレクションを返したり、`ActiveRecord::Relation` のインスタンスを返す。また、find や first などの`１つのエンティティ`を検索するメソッドの場合、その`モデルのインスタンス`を返す。
+- `find` で複数検索 `clients = Client.find([1, 10])`
+- `find_by` で任意のキーで検索 `Client.find_by first_name: 'Lifo'` これは `Client.where(first_name: 'Lifo').take` と等価。
+- `find_by!` メソッドの動作は、マッチするレコードが見つからない場合に `ActiveRecord::RecordNotFound例外`が発生する
+  > Rails では、メモリを圧迫しないサイズにバッチを分割して処理するための方法を 2 とおり提供しています。1 つ目は find_each メソッドを使用する方法です。これは、レコードのバッチを 1 つ取り出し、次に、各レコードを 1 つのモデルとして個別にブロックに yield します。2 つ目の方法は find_in_batches メソッドを使用する方法です。レコードのバッチを 1 つ取り出し、次にバッチ全体をモデルの配列としてブロックに yield します。
+
+> find_each 　メソッドと　 find_in_batches 　メソッドは、一度にメモリに読み込めないような大量のレコードに対するバッチ処理のためのものです。数千のレコードに対して単にループ処理を行なうのであれば通常の検索メソッドで十分です。
+
+- find_each: 複数のレコードを一括で取り出し、続いて 各 レコードを 1 つのブロックに yield。以下の例では、find_each でバッチから 1000 件のレコードを一括で取り出し、各レコードをブロックに yield。
+- `batch_size:` で一度に取り出す量を指定。
+
+```ruby
+User.find_each { |user| NewsMailer.weekly(user).deliver_now }
+```
+
+- find_in_batches: バッチ を**個別にではなく** `モデルの配列として`ブロックに yield する。
+
+```ruby
+# 1回あたり add_invoices に納品書1000通の配列を渡す
+Invoice.find_in_batches do |invoices|
+  export.add_invoices(invoices)
+end
+```
+
+- where は文字列ではなく配列を使って構築する。`Client.where("orders_count = ? AND locked = ?", params[:orders], false)`　これは SQL Injection の危険性がある `Client.where("orders_count = #{params[:orders]}")`
+- where + ハッシュ引数　`Client.where("created_at >= :start_date AND created_at <= :end_date", {start_date: params[:start_date], end_date: params[:end_date]})`
+- `等値条件`指定が直感的にできる。
+  `Client.where(locked: true)` ハッシュにする
+  `Client.where('locked' => true)` 文字列形式にする
+  `Article.where(author: author)` オブジェクトを渡すこともできる。
+- `BETWEEN` を表現するための `..` (範囲条件) → `Client.where(created_at: (Time.now.midnight - 1.day)..Time.now.midnight)`
+- `IN` を表現する → 条件ハッシュにそのための配列を 1 つ渡す
+- `NOT` → `Client.where.not(locked: true)`
+- only メソッドで、条件を上書できる。`Article.where('id > 10').limit(20).order('id desc').only(:order, :where)` → :order と :where 条件のみ適用。
+- `Nullリレーション`: `Article.none` []または nil を返すと、このコード例では呼び出し元のコードを壊してしまうため。
+
+##### レコードを更新できないようロックする
+- ロックは、データベースのレコードを更新する際の`競合状態を避け`、`アトミックな` (=`中途半端な状態のない`) 更新を行なうために有用です。
+- `楽観的ロック (optimistic)`: レコードがオープンされてから変更されたことがあるかどうかをチェック。そのような変更が行われ、かつ更新が無視された場合、`ActiveRecord::StaleObjectError` 例外が発生.
+- 楽観的ロックを使用するには、テーブルに lock_version という名前の integer 型カラムがある必要がある。Active Record は、レコードが更新されるたびに lock_version カラム の値を 1 ずつ増やします。更新リクエストが発生したときの lock_version の値がデータベース上の lock_version カラムの値よりも小さい場合、更新リクエストは失敗し、ActiveRecord::StaleObjectError エラーが発生する。
+- ActiveRecord::Base には、lock_version カラム名を上書きするための locking_column が用意されている。`self.locking_column = :lock_client_column`
+- `悲観的ロック`: データベースが提供するロック機構を使用。リレーションの構築時に lock を使用すると、選択した行に対する排他的ロックを取得できる。lock を使用するリレーションは、デッドロック条件を回避するために通常トランザクションの内側にラップされる。
+
+```ruby
+Item.transaction do
+  i = Item.lock.first
+  i.name = 'Jones'
+  i.save!
+end
+```
+
+- モデルのインスタンスが既にある場合は、トランザクションを開始してその中でロックを一度に取得できる。
+
+```ruby
+item = Item.first
+item.with_lock do
+  # このブロックはトランザクション内で呼び出される
+  # itemはロック済み
+  item.increment!(:views)
+end
+```
+
+##### 結合
+- ネストした関連付けを結合する (単一レベル)　`Article.joins(comments: :guest)` は次のような SQL が発行される。
+
+```sql
+SELECT articles.* FROM articles
+  INNER JOIN comments ON comments.article_id = articles.id
+  INNER JOIN guests ON guests.comment_id = comments.id
+  # 「ゲストによるコメントが1つある記事をすべて返す」
+```
+
+- ネストした関連付けを結合する (複数レベル) `Category.joins(articles: [{ comments: :guest }, :tags])`
+
+```sql
+SELECT categories.* FROM categories
+  INNER JOIN articles ON articles.category_id = categories.id
+  INNER JOIN comments ON comments.article_id = articles.id
+  INNER JOIN guests ON guests.comment_id = comments.id
+  INNER JOIN tags ON tags.article_id = articles.id
+```
+
+- `結合されたテーブルで条件を指定する`
+
+```ruby
+time_range = (Time.now.midnight - 1.day)..Time.now.midnight
+Client.joins(:orders).where('orders.created_at' => time_range)
+```
+
+- 上記の where よりもさらにわかりやすい方法 → ハッシュ条件をネスト化する。
+
+```ruby
+time_range = (Time.now.midnight - 1.day)..Time.now.midnight
+Client.joins(:orders).where(orders: { created_at: time_range })
+```
+
+- `関連レコードがあるかどうかにかかわらずレコードのセットを取得したい場合` → `left_outer_joins` 関連レコードがあるときのみ → `joins` (INNER JOIN)
+
+##### スコープ
+- 以下のようにスコープを作成すると、`Article.published`にして手軽に特定の条件下のデータを取得することができる。
+```ruby
+class Article < ApplicationRecord
+  scope :published, -> { where(published: true) }
+end
+# 引数を渡す
+class Article < ApplicationRecord
+  scope :created_before, ->(time) { where("created_at < ?", time) }
+end
+```
+- これは以下のコードと等価
+```ruby
+class Article < ApplicationRecord
+  def self.published
+    where(published: true)
+  end
+end
+```
+- スコープをスコープ内で `チェイン (chain)` させることもできる。
+```ruby
+class Article < ApplicationRecord
+  scope :published,               -> { where(published: true) }
+  scope :published_and_commented, -> { published.where("comments_count > 0") }
+end
+```
+> 条件文を評価した結果がfalseになった場合であっても、スコープは常にActiveRecord::Relationオブジェクトを返すという点です。クラスメソッドの場合はnilを返すので、この振る舞いが異なります。したがって、条件文を使ってクラスメソッドをチェインさせていて、かつ、条件文のいずれかがfalseを返す場合、NoMethodErrorを発生することがあります。
+- `デフォルトスコープを適用`: あるスコープをモデルのすべてのクエリに適用したい場合、モデル自身の内部でdefault_scopeメソッドを使用することができる。→ Laravel の global scope と等価。
+- `スコープのマージ`: 
+```ruby
+class User < ApplicationRecord
+  scope :active, -> { where state: 'active' }
+  scope :inactive, -> { where state: 'inactive' }
+end
+
+User.active.inactive
+# SELECT "users".* FROM "users" WHERE "users"."state" = 'active' AND "users"."state" = 'inactive'
+```
+- 何らかの理由でスコープをすべて解除したい → `unscoped`
+
+##### Other things
+- `動的検索`: テーブルに定義されたすべての`フィールド` (`属性`とも呼ばれます) に対して自動的に検索メソッドを提供する。たとえば、Clientモデルに　first_name というフィールドがあると、`find_by_first_name` というメソッドが Active Record によって自動的に作成される。Client モデルに locked というフィールドがあれば、`find_by_locked` というメソッドを使用できる。name と locked の両方を検索したいのであれば、2つのフィールド名をandでつなぐ。`Client.find_by_first_name_and_locked("Ryan", true)`
+- `enumマクロ`: 整数のカラムを設定可能な値の集合にマッピング
+```ruby
+class Book < ApplicationRecord
+  enum availability: [:available, :unavailable]
+end
+
+# 下の両方の例で、利用可能な本を問い合わせている
+Book.available
+# または
+Book.where(availability: :available)
+
+book = Book.new(availability: :available)
+book.available?   # => true
+book.unavailable! # => true
+book.available?   # => false
+```
+- `Client.create_with(locked: false).find_or_create_by(first_name: 'Andy')` は次にコードと等価。
+```ruby
+Client.find_or_create_by(first_name: 'Andy') do |c|
+  c.locked = false
+end
+```
+- `find_or_initialize_by`メソッドは create の代りに new を呼ぶ。つまり、モデルの新しいインスタンスは作成されるが、その時点ではデータベースに保存されない。
+- pluck:
+```ruby
+class Client < ApplicationRecord
+  def name
+    "私は#{super}"
+  end
+end
+
+Client.select(:name).map &:name
+# => ["私はDavid", "私はJeremy", "私はJose"]
+
+Client.pluck(:name)
+# => ["David", "Jeremy", "Jose"]
+```
+- `many?` :Returns true if there is more than one record.
+- リレーションによってトリガされるクエリでEXPLAINを実行することができる。 `User.where(id: 1).joins(:articles).explain`
