@@ -20,6 +20,7 @@
         - [スコープ](#スコープ)
         - [Other things](#other-things)
     - [Connect multiple dbs](#connect-multiple-dbs)
+    - [Active Model](#active-model)
 
 <!-- /TOC -->
 
@@ -698,3 +699,33 @@ Client.pluck(:name)
   2. クラスタを越える JOIN
   3. replica のロードバランシング
   4. マルチプルデータベースのスキーマキャッシュのダンプ
+
+#### Active Model
+- `Action Pack` ヘルパーは、Active Model のおかげで`非Active Record`モデルとやりとりすることができる。Active Model　を使用することで、カスタムのORM (オブジェクトリレーショナルマッピング) を作成して　Rails　フレームワークの外で使用することもできる。
+- `include ActiveModel::AttributeMethods` → クラスのメソッドにカスタムのプレフィックスやサフィックスを追加
+- `ActiveModel::Callbacks`　→ Active Record スタイルのコールバックを提供
+- クラスで `persisted?` メソッドと` id メソッド`が定義されていれば、`ActiveModel::Conversion` モジュールをインクルードして Rails の変換メソッドをそのクラスのオブジェクトに対して呼び出すことができる。
+- `ActiveModel::Dirty` モジュールを → オブジェクトで変更が生じたかどうかを検出できる。
+```ruby
+# 元の値から変更された属性のハッシュを返す
+person.changed_attributes # => {"first_name"=>nil}
+
+# 変更のハッシュを返す (ハッシュのキーは属性名、ハッシュの値はフィールドの新旧の値の配列
+person.changes # => {"first_name"=>[nil, "First Name"]}
+```
+- `ActiveModel::Validations` → クラスオブジェクトをActive Recordスタイルで検証できる
+- `ActiveModel::Naming` → 命名やルーティングの管理を支援するクラスメソッドを多数追加
+```ruby
+Person.model_name.name                # => "Person"
+Person.model_name.singular            # => "person"
+Person.model_name.plural              # => "people"
+```
+- `ActiveModel::Model` → Action Pack や Action View と連携する機能をすぐに使えるようになる。
+- `include ActiveModel::Serializers::JSON` で `def attributes=(hash)` を宣言しておけば、Json からモデルのインスタンスを作成できる。
+```ruby
+json = { name: 'Bob' }.to_json
+person = Person.new
+person.from_json(json) # => #<Person:0x00000100c773f0 @name="Bob">
+person.name  
+```
+- `ActiveModel::SecurePassword` → 任意のパスワードを暗号化して安全に保存する手段を提供。
