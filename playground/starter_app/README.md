@@ -729,3 +729,8 @@ person.from_json(json) # => #<Person:0x00000100c773f0 @name="Bob">
 person.name  
 ```
 - `ActiveModel::SecurePassword` → 任意のパスワードを暗号化して安全に保存する手段を提供。
+### Action View
+- Action View には `テンプレート`、`パーシャル`、`レイアウト` の3つの役割がある。
+- テンプレートの拡張子が `.builder` であれば、`Builder::XmlMarkup` ライブラリの新鮮なインスタンスが使用される。
+- `<% %>` タグはその中に書かれた Ruby コードを実行しますが、実行結果は出力されない。条件文やループ、ブロックなど出力の不要な行はこのタグの中に書く。
+- `<%= %> `タグでは実行結果がWebページに出力される。
