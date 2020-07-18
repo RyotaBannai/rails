@@ -30,6 +30,7 @@
     - [FormTagHelper](#formtaghelper)
     - [ローカライズされたビュー](#ローカライズされたビュー)
     - [render, rendering](#render-rendering)
+    - [form](#form)
 
 <!-- /TOC -->
 
@@ -902,7 +903,10 @@ collection_select(:category, :book_id, Book.all, :id, :name_with_uppercase, { pr
 </select>
 ```
 - 同じようなコンセプトで `collection_radio_buttons`, `collection_check_boxes`　がある。
-- `option_groups_from_collection_for_select(@continents, :countries, :name, :id, :name, 3)` select の option でグループ化してあげる。この場合、 continent でグループ化している(1)。(2) でグループ化されるオプションを指定。(3) グループ名、(4) option の value, (5) option のテキスト、最後に (6)が デフォルトで selected される option のインデックス。これを select タグで囲む必要がある。`<%= f.select :post_type_id,   option_groups_from_collection_for_select(@categories, :post_types, :name, :id, :name), :include_blank => "Please select..." %>`[ref](https://apidock.com/rails/ActionView/Helpers/FormOptionsHelper/option_groups_from_collection_for_select)
+- `option_groups_from_collection_for_select(@continents, :countries, :name, :id, :name, 3)` select の option でグループ化してあげる。この場合、 continent でグループ化している(1)。(2) でグループ化されるオプションを指定。(3) グループ名、(4) option の value, (5) option のテキスト、最後に (6)が デフォルトで selected される option のインデックス。これを select タグで囲む必要がある。
+  1. `<%= f.select :post_type_id, option_groups_from_collection_for_select(@categories, :post_types, :name, :id, :name), :include_blank => "Please select..." %>` 
+  2. `<%= select_tag(:city_id, options_for_select(...)) %>`
+  - [ref](https://apidock.com/rails/ActionView/Helpers/FormOptionsHelper/option_groups_from_collection_for_select)
 - `select`: `select("article", "person_id", Person.all.collect { |p| [ p.name, p.id ] }, { include_blank: true })`
 #### FormTagHelper
 - フォームタグを作成するためのメソッドを多数提供。これらのメソッドは、テンプレートに割り当てられている Active Record オブジェクトに依存しない点がFormHelperと異なる。
@@ -977,3 +981,37 @@ end
 - redirect させたい → `redirect_to action: :index`
 - redirect は ブラウザとのやりとりが1往復増えるため、処理を工夫したい → そのままリダイレクト先で表示する内容を render する。
 - `<div id="content"><%= content_for?(:content) ? yield(:content) : yield %></div>` で id が存在するかどうか調べられる。この場合、content_for :content が存在すればそれを yield し、なければ、extends してるファイルの全コードを yield する。
+#### form
+- form_tag に class などを追加したいとき：`form_tag({controller: "people", action: "search"}, method: "get", class: "nifty_form") # => '<form accept-charset="UTF-8" action="/people/search" method="get" class="nifty_form">'`
+- フォームに `<%= text_field_tag(:query) %>`というコードが含まれていたとすると、コントローラで `params[:query]` と指定すればこのフィールドの値にアクセスできる。
+- `モデルオブジェクトヘルパー`: *_tag ヘルパーをモデルオブジェクトの作成/修正に用いることはもちろん可能だが、1つ1つのタグについて正しいパラメータが使われているか、入力のデフォルト値は適切に設定されているかなどをいちいちコーディングするのは何とも面倒 → モデルオブジェクトヘルパー を使用。`<%= text_field(:person, :name) %>　# => <input id="person_name" name="person[name]" type="text" value="Henry"/> を生成。` このフォームを送信すると、ユーザーが入力した値は `params[:person][:name]` に保存される。
+- ヘルパーに渡すのはインスタンス変数の「名前」でないといけない。 (シンボル :person や文字列 "person" など)。`渡すのはモデルオブジェクトのインスタンスそのものではない。`!!!
+- `text_field(:person, :name)` とすると何度も モデル名を呼び出さないといけない。この場合だと `:person` → `form_for` を使う。
+```ruby
+<%= form_for @article, url: {action: "create"}, html: {class: "nifty_form"} do |f| %>
+  <%= f.text_field :title %>
+  <%= f.text_area :body, size: "60x12" %>
+  <%= f.submit "Create" %>
+<% end %>
+```
+- @article は、実際に編集されるオブジェクトそのもの
+- f: フォームビルダーオブジェクト
+- RESTful な resource を使用している場合、form_for でリソースの取り扱いが簡単になる。レコード識別は、レコードが新しい場合には `record.new_record?` が必要とされている、などの適切な推測を行ってくれる。
+```ruby
+## 新しい記事の作成
+# 長いバージョン
+form_for(@article, url: articles_path)
+# 短いバージョン(レコード識別を利用)
+form_for(@article)
+
+## 既存の記事の修正
+# 長いバージョン
+form_for(@article, url: article_path(@article), html: {method: "patch"})
+# 短いバージョン
+form_for(@article)
+```
+- `form_for の id と class について`： Rails はフォームの class と id を自動的に設定してくれる。この場合、記事を作成するフォームには id と、new_article という class が与えられる。もし仮に id が23の記事を編集しようとすると、`class` は `edit_article` に設定され、`id` は `edit_article_23` に設定される。
+> モデルで単一テーブル継承(STI: single-table inheritance)を使っている場合、親クラスでリソースが宣言されていてもサブクラスでレコード識別を利用することはできません。その場合は、モデル名、:url、:methodを明示的に指定する必要があります。???
+- `名前空間を扱う`: `form_for [:admin, @article]` ネスト指定てもコンマで宣言すれば良い。
+- PATCH PUT DELETE を使う → `form_tag(search_path, method: "patch")`
+> :include_blankや:promptが指定されていなくても、選択属性requiredがtrueになっていると、:include_blankは強制的にtrueに設定され、表示のsizeは1になり、multipleはtrueになりません。???
