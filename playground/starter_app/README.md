@@ -21,6 +21,9 @@
         - [Other things](#other-things)
     - [Connect multiple dbs](#connect-multiple-dbs)
     - [Active Model](#active-model)
+- [Action View](#action-view)
+    - [テンプレート](#テンプレート)
+    - [パーシャル (部分テンプレート)](#パーシャル-部分テンプレート)
 
 <!-- /TOC -->
 
@@ -112,12 +115,6 @@ end
 - production (本番) 環境など、development 以外の環境に対してもマイグレーションを実行したい場合は、`rails db:migrate RAILS_ENV=production` のように環境変数を明示的に指定する必要があり
 - `strong_parameters`: コントローラのアクションで本当に使ってよいパラメータだけを厳密に指定することを強制する. `params.require(:user).permit(:name, :email)` モデルに対する「`マスアサインメント`」が発生すると、正常なデータの中に悪意のあるデータが含まれてしまう可能性があるため。
 - `コントローラの public メソッドは private より前に配置しないといけない。`
-- 通常の変数ではなく、`インスタンス変数` ( @ を冒頭に付けることで示します) が使われている点に注目。これは、Rails ではコントローラのインスタンス変数はすべてビューに渡されるようになっているため(訳注: Rails はそのために背後でインスタンス変数をコントローラからビューに絶え間なくコピーし続けている)。
-- `link_to`: 現在と同じコントローラのアクションにリンクする場合は、`:controller` の指定は不要。コントローラを指定しなければ、デフォルトで現在のコントローラが使われる。
-- `pluralize`: 数値を受け取ってそれに応じて英語の「単数形/複数形」活用を行ってくれる Rails のヘルパーメソッド。数値が 1 より大きい場合は、引数の文字列を自動的に複数形に変更する。
-- `scope: :article`のようにスコープにシンボルを指定すると、フィールドが空の状態で作成される。
-- `パーシャルのファイル名`の先頭には`アンダースコア`を追加. (パーシャルファイルはフォームなど layout として使い回しができるファイルのことを言う)
-- `article_path(@article)ヘルパー` → article id = XX の詳細画面へのパスを作成。
 
 ### Model
 
@@ -731,6 +728,64 @@ person.name
 - `ActiveModel::SecurePassword` → 任意のパスワードを暗号化して安全に保存する手段を提供。
 ### Action View
 - Action View には `テンプレート`、`パーシャル`、`レイアウト` の3つの役割がある。
-- テンプレートの拡張子が `.builder` であれば、`Builder::XmlMarkup` ライブラリの新鮮なインスタンスが使用される。
-- `<% %>` タグはその中に書かれた Ruby コードを実行しますが、実行結果は出力されない。条件文やループ、ブロックなど出力の不要な行はこのタグの中に書く。
-- `<%= %> `タグでは実行結果がWebページに出力される。
+#### テンプレート
+- `Builder`:
+  - テンプレートの拡張子が `.builder` であれば、`Builder::XmlMarkup` ライブラリの新鮮なインスタンスが使用される。( Builder テンプレートは ERB の代わりに使用できる、よりプログラミング向きな記で、特にXMLコンテンツの生成が得意)
+- `JBuilder`: Builderと似ているが、XML ではなく JSON を生成する
+```ruby
+json.name("Alex")
+json.email("alex@example.com")
+```
+```json
+// 上のコードからの生成される Json
+{
+  "name": "Alex",
+  "email": "alex@example.com"
+}
+```
+- `ERB`:
+  - `<% %>` タグはその中に書かれた Ruby コードを実行しますが、実行結果は出力されない。条件文やループ、ブロックなど出力の不要な行はこのタグの中に書く。
+  - `<%= %> `タグでは実行結果がWebページに出力される。
+  - Ruby でよく使用される print や puts のような通常の出力関数は ERB では使用できない。
+#### パーシャル (部分テンプレート)
+- コードを分割するための仕組み、使い回せるようにする仕組み
+- `パーシャルのファイル名`の先頭には`アンダースコア`を追加. (パーシャルファイルはフォームなど layout として使い回しができるファイルのことを言う)
+- パーシャルをビューの一部に含めて出力するには、ビューで `render` メソッドを使用　`<%= render "menu" %>` 
+- 他のフォルダの下にあるパーシャルを呼び出す `<%= render "shared/menu" %>`
+- 通常の変数ではなく、`インスタンス変数` ( `@` を冒頭に付ける) が使われている点に注目。これは、Rails ではコントローラのインスタンス変数はすべてビューに渡されるようになっているため　(訳注: Rails はそのために背後でインスタンス変数をコントローラからビューに絶え間なくコピーし続けている)。
+- 変数を渡す。`= render partial: 'shared/item_header', locals: { item: @item }`　または、`= render 'shared/item_header', { item: @item }` 他のオプションも渡したいときは、キーバリュー式で書かないといけない。
+- `ActionView::Partials::PartialRenderer`は、デフォルトでテンプレートと同じ名前を持つローカル変数の中に自身のオブジェクトを持つ。つまり、次の２つのコードは等価。
+- `<%= render partial: "product" %>` == `<%= render partial: "product", locals: { product: product } %>` ローカル変数の名前を変更したい場合 → `as` を使う。`<%= render partial: "product", as: "item" %>` → product partial 内部で item として使う。
+- 別名のローカル変数を使用したい場合。つまり上の例で言うと、product partial 内部 で product ローカル変数以外の変数を使いたい場合。→ `object` を使う。仮に item と言うローカル変数を product として使いた場合 `<%= render partial: "product", locals: { product: @product } %>` → `<%= render partial: "product", object: @item %>` とする。このままだと @item は product として使用可能な状態なので、item として使いたいなら `as` でリネームする → `<%= render partial: "product", object: @item, as: "item" %>` これは最終的にハッシュを使ってパスする場合、`<%= render partial: "product", locals: { item: @item } %>` と等価。
+- コレクションをパスする。`<%= render partial: "product", collection: @products %>`
+- コレクション出力には短縮記法: `<%= render @products %>` これらは次のコードの短縮形である。
+```ruby
+<% @products.each do |product| %>
+  <%= render partial: "product", locals: { product: product } %>
+<% end %>
+```
+- `スペーサーテンプレート`: `:spacer_template` オプションを使用すると、主要なパーシャル同士の間を埋める第二のパーシャルを指定することができる。`<%= render partial: @products, spacer_template: "product_ruler" %>` 主要な `_product` パーシャルの合間に、スペーサーとなる `_product_ruler` パーシャルが出力されます (`_product_ruler` にはデータは渡していない)
+- `パーシャルレイアウト`: `アプリケーション全体で共通のレイアウト`とは異なり、パーシャルレイアウトのファイル名冒頭には`アンダースコア`が必要
+```ruby
+# articles/show.html.erb
+<%= render partial: 'article', layout: 'box', locals: { article: @article } %>
+```
+```ruby
+# articles/_box.html.erb
+<div class='box'>
+  <%= yield %>
+</div>
+```
+- yield を呼び出す代わりに、パーシャルレイアウト内にあるコードのブロックを出力することもできる。
+```ruby
+<% render(layout: 'box', locals: { article: @article }) do %>
+  <div>
+    <p><%= article.body %></p>
+  </div>
+<% end %>
+```
+
+- `link_to`: 現在と同じコントローラのアクションにリンクする場合は、`:controller` の指定は不要。コントローラを指定しなければ、デフォルトで現在のコントローラが使われる。
+- `pluralize`: 数値を受け取ってそれに応じて英語の「単数形/複数形」活用を行ってくれる Rails のヘルパーメソッド。数値が 1 より大きい場合は、引数の文字列を自動的に複数形に変更する。
+- `scope: :article`のようにスコープにシンボルを指定すると、フィールドが空の状態で作成される。
+- `article_path(@article)ヘルパー` → article id = XX の詳細画面へのパスを作成。
