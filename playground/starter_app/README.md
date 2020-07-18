@@ -28,7 +28,8 @@
     - [Helpers](#helpers)
     - [FormHelper](#formhelper)
     - [FormTagHelper](#formtaghelper)
-- [ローカライズされたビュー](#ローカライズされたビュー)
+    - [ローカライズされたビュー](#ローカライズされたビュー)
+    - [render, rendering](#render-rendering)
 
 <!-- /TOC -->
 
@@ -796,6 +797,8 @@ json.email("alex@example.com")
 - `article_path(@article)ヘルパー` → article id = XX の詳細画面へのパスを作成。
 #### ビューのパス
 - デフォルトでは、`app/views` ディレクトリの下のみを探索。`prepend_view_path` メソッドや `append_view_path` メソッドを用いることで、パスの解決時に優先して検索される別のディレクトリを追加できる。
+- コントローラのアクションの最終部分で明示的な画面出力が指示されていない場合は、コントローラが使用できるビューのパスから `アクション名.html.erb` というビューテンプレートを探し、それを使用して自動的に出力する
+- 実際のレンダリングは、`ActionView::TemplateHandlers` のサブクラスで行われる
 #### Helpers 
 - `AssetTagHelper`: 画像・JavaScriptファイル・スタイルシート・フィードなどのアセットにビューをリンクするHTMLを生成するメソッドを提供。デフォルトでは、現在ホストされている public フォルダ内のアセットに対してリンク、アプリケーション設定 (通常はconfig/environments/production.rb) の config.action_controller.asset_host で設定されているアセット用サーバーにリンクすることもできる。たとえば、assets.example.com というアセット専用ホストを使用したいとすると、
 ```ruby
@@ -905,7 +908,7 @@ collection_select(:category, :book_id, Book.all, :id, :name_with_uppercase, { pr
 - フォームタグを作成するためのメソッドを多数提供。これらのメソッドは、テンプレートに割り当てられている Active Record オブジェクトに依存しない点がFormHelperと異なる。
 - `FormHelper` できることは FormTagHelper でも同じようなことは大体できる。
 - `check_box_tag`: `check_box_tag 'accept' # => <input id="accept" name="accept" type="checkbox" value="1" />`
-### ローカライズされたビュー
+#### ローカライズされたビュー
 - デフォルトでは `app/views/articles/show.html.erb`。`I18n.locale = :de` を設定すると、代りに `app/views/articles/show.de.html.erb` が出力される。
 - Rails は `I18n.locale` に設定できるシンボルを制限していないので、ローカライズにかぎらず、あらゆる状況に合わせて異なるコンテンツを表示し分けるようにすることができる。
 ```ruby
@@ -916,3 +919,61 @@ def set_expert_locale
 end
 # app/views/articles/show.expert.html.erb のような特殊なビューを表示する
 ```
+#### render, rendering
+- `render "edit"` または、`render :edit` で `edit.html.erb` を表示
+- `render "products/show"` または、明示的に `render template: "products/show"` とすれば、別のコントローラの配下にあるテンプレートを使用して出力できる。
+- json を出力：`render json: @product`
+- `コントローラ用のレイアウトを指定`: 次のように指定すると `ProductsController` からの出力で使用されるレイアウトは `app/views/layouts/inventory.html.erb` になる。
+```ruby
+class ProductsController < ApplicationController
+  layout "inventory"
+  #...
+end
+```
+- アプリケーション全体で特定のレイアウトを使用したい → `ApplicationController` クラスで layout を宣言
+```ruby
+class ApplicationController < ActionController::Base
+  layout "main"
+  #...
+end
+```
+- レイアウトの指定にシンボルを使う
+```ruby
+class ProductsController < ApplicationController
+  layout :products_layout
+
+  def show
+    @product = Product.find(params[:id])
+  end
+
+  private
+    def products_layout
+      @current_user.special? ? "special" : "products"
+    end
+
+end
+```
+- `テンプレートの継承`!!!: 
+```ruby
+# app/controllers/application_controller
+class ApplicationController < ActionController::Base
+end
+
+# app/controllers/admin_controller
+class AdminController < ApplicationController
+end
+
+# app/controllers/admin/products_controller
+class Admin::ProductsController < AdminController
+  def index
+  end
+end
+```
+- このときのadmin/products#indexアクションの探索順序。
+  1. `app/views/admin/products/`
+  2. `app/views/admin/`
+  3. `app/views/application/`
+  - つまり、`app/views/application/` は共有パーシャルの置き場所として良い。
+- redirect させたい → `redirect_to action: :index`
+- redirect は ブラウザとのやりとりが1往復増えるため、処理を工夫したい → そのままリダイレクト先で表示する内容を render する。
+- `<div id="content"><%= content_for?(:content) ? yield(:content) : yield %></div>` で id が存在するかどうか調べられる。この場合、content_for :content が存在すればそれを yield し、なければ、extends してるファイルの全コードを yield する。
