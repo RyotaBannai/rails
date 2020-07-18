@@ -27,6 +27,8 @@
     - [ビューのパス](#ビューのパス)
     - [Helpers](#helpers)
     - [FormHelper](#formhelper)
+    - [FormTagHelper](#formtaghelper)
+- [ローカライズされたビュー](#ローカライズされたビュー)
 
 <!-- /TOC -->
 
@@ -815,7 +817,7 @@ image_tag("rails.png") # => <img src="http://assets.example.com/images/rails.png
 <% end %>
 ```
 ```html
-<!-- extends を記述される方 lauout file -->
+<!-- extends を記述される方 layout file -->
 <html>
   <head>
     <title>ようこそ！</title>
@@ -875,3 +877,42 @@ image_tag("rails.png") # => <img src="http://assets.example.com/images/rails.png
 <% end %>
 ```
 - `file_field`: `file_field(:user, :avatar) # => <input type="file" id="user_avatar" name="user[avatar]" />`
+- `collection_select`: collection から select tag と その option を作成。基本:
+```ruby
+<%= f.collection_select(:name, @categories, :id, :name) %>
+```
+```ruby
+<select id="page_name" name="page[name]">
+  <option value="1">Railsの基礎知識</option>
+  <option value="2">Rubyの基礎知識</option>
+</select>
+```
+- 少し応用 → categories にある関連モデルの Book を option に指定したい： name に model で指定したメソッドを使っても良い。[ref](https://railsguides.jp/action_view_overview.html#collection-select)
+```ruby
+collection_select(:category, :book_id, Book.all, :id, :name_with_uppercase, { prompt: true })
+```
+```ruby
+<select name="book[category_id]">
+  <option value="">Please select</option>
+  <option value="1" selected="selected">Harry Potter</option>
+  <option value="2">Lord of the Rings</option>
+</select>
+```
+- 同じようなコンセプトで `collection_radio_buttons`, `collection_check_boxes`　がある。
+- `option_groups_from_collection_for_select(@continents, :countries, :name, :id, :name, 3)` select の option でグループ化してあげる。この場合、 continent でグループ化している(1)。(2) でグループ化されるオプションを指定。(3) グループ名、(4) option の value, (5) option のテキスト、最後に (6)が デフォルトで selected される option のインデックス。これを select タグで囲む必要がある。`<%= f.select :post_type_id,   option_groups_from_collection_for_select(@categories, :post_types, :name, :id, :name), :include_blank => "Please select..." %>`[ref](https://apidock.com/rails/ActionView/Helpers/FormOptionsHelper/option_groups_from_collection_for_select)
+- `select`: `select("article", "person_id", Person.all.collect { |p| [ p.name, p.id ] }, { include_blank: true })`
+#### FormTagHelper
+- フォームタグを作成するためのメソッドを多数提供。これらのメソッドは、テンプレートに割り当てられている Active Record オブジェクトに依存しない点がFormHelperと異なる。
+- `FormHelper` できることは FormTagHelper でも同じようなことは大体できる。
+- `check_box_tag`: `check_box_tag 'accept' # => <input id="accept" name="accept" type="checkbox" value="1" />`
+### ローカライズされたビュー
+- デフォルトでは `app/views/articles/show.html.erb`。`I18n.locale = :de` を設定すると、代りに `app/views/articles/show.de.html.erb` が出力される。
+- Rails は `I18n.locale` に設定できるシンボルを制限していないので、ローカライズにかぎらず、あらゆる状況に合わせて異なるコンテンツを表示し分けるようにすることができる。
+```ruby
+# app/controllers/application.rb
+before_action :set_expert_locale
+def set_expert_locale
+  I18n.locale = :expert if current_user.expert?
+end
+# app/views/articles/show.expert.html.erb のような特殊なビューを表示する
+```
