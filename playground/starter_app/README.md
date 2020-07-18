@@ -24,6 +24,9 @@
 - [Action View](#action-view)
     - [テンプレート](#テンプレート)
     - [パーシャル (部分テンプレート)](#パーシャル-部分テンプレート)
+    - [ビューのパス](#ビューのパス)
+    - [Helpers](#helpers)
+    - [FormHelper](#formhelper)
 
 <!-- /TOC -->
 
@@ -789,3 +792,86 @@ json.email("alex@example.com")
 - `pluralize`: 数値を受け取ってそれに応じて英語の「単数形/複数形」活用を行ってくれる Rails のヘルパーメソッド。数値が 1 より大きい場合は、引数の文字列を自動的に複数形に変更する。
 - `scope: :article`のようにスコープにシンボルを指定すると、フィールドが空の状態で作成される。
 - `article_path(@article)ヘルパー` → article id = XX の詳細画面へのパスを作成。
+#### ビューのパス
+- デフォルトでは、`app/views` ディレクトリの下のみを探索。`prepend_view_path` メソッドや `append_view_path` メソッドを用いることで、パスの解決時に優先して検索される別のディレクトリを追加できる。
+#### Helpers 
+- `AssetTagHelper`: 画像・JavaScriptファイル・スタイルシート・フィードなどのアセットにビューをリンクするHTMLを生成するメソッドを提供。デフォルトでは、現在ホストされている public フォルダ内のアセットに対してリンク、アプリケーション設定 (通常はconfig/environments/production.rb) の config.action_controller.asset_host で設定されているアセット用サーバーにリンクすることもできる。たとえば、assets.example.com というアセット専用ホストを使用したいとすると、
+```ruby
+config.action_controller.asset_host = "assets.example.com"
+image_tag("rails.png") # => <img src="http://assets.example.com/images/rails.png" />
+```
+- `image_path`: `image_path("edit.png") # => /assets/edit.png` `config.assets.digest` が true に設定されている場合、ファイル名にフィンガープリントが追加される。 `image_path("edit.png") # => /assets/edit-2d1a2db63fc738690021fedb5a65b68e.png`
+- `image_url`: image への url を生成
+- `image_tag`: img タグを生成 `image_tag("icon.png") # => <img src="/assets/icon.png" />`
+- `javascript_include_tag`: js script タグを生成 `javascript_include_tag "common" # => <script src="/assets/common.js"></script>`
+- `stylesheet_link_tag`: style タグ生成
+- `BenchmarkHelper`: ボトルネックになりそうなコードをラップして実行時間を算出する。
+- `CacheHelper`: cacheメソッドは、(アクション全体やページ全体ではなく) ビューの断片をキャッシュするメソッドです。この手法は、メニュー・ニュース記事・静的HTMLの断片などをキャッシュするのに便利
+- `CaptureHelper`: テンプレートの一部を変数に保存する。保存された変数は、テンプレートやレイアウトのどんな場所でも自由に使用できる。
+```ruby
+# 小 file つまり、extends を記述する方
+<% @greeting = capture do %>
+  <p>ようこそ！日付と時刻は<%= Time.now %>です</p>
+<% end %>
+```
+```html
+<!-- extends を記述される方 lauout file -->
+<html>
+  <head>
+    <title>ようこそ！</title>
+  </head>
+  <body>
+    <%= @greeting %>
+  </body>
+</html>
+```
+- `content_for`: 特定の id を yield する。
+```html
+<html>
+  <head>
+    <title>ようこそ！</title>
+    <%= yield :special_script %>
+  </head>
+  <body>
+    <p>ようこそ！日付と時刻は<%= Time.now %>です</p>
+  </body>
+</html>
+```
+```html
+<p>これは特別なページです。</p>
+
+<% content_for :special_script do %>
+  <script>alert('Hello!')</script>
+<% end %>
+```
+- `date_select`: select を自動生成 `<%= date_select("article", "published_on") %>`
+- `DebugHelper`: YAML からダンプしたオブジェクトを含む pre タグを返す。
+#### FormHelper
+- `form_for`:
+```ruby
+# メモ: @person変数はコントローラ側で設定済みであるとする (@person = Person.newなど)
+<%= form_for @person, url: { action: "create" } do |f| %>
+  <%= f.text_field :first_name %>
+  <%= f.text_field :last_name %>
+  <%= submit_tag 'Create' %>
+<% end %>
+```
+```html
+<form action="/people/create" method="post">
+  <input id="person_first_name" name="person[first_name]" type="text" />
+  <input id="person_last_name" name="person[last_name]" type="text" />
+  <input name="commit" type="submit" value="Create" />
+</form>
+```
+- `fields_for`: form_for のような特定のモデルオブジェクトの外側にスコープを作成するが、フォームタグ自体は作成しない。このため、fields_for は同じフォームに別のモデルオブジェクトを追加するために使われる。
+```ruby
+<%= form_for @person, url: { action: "update" } do |person_form| %>
+  First name: <%= person_form.text_field :first_name %>
+  Last name : <%= person_form.text_field :last_name %>
+
+  <%= fields_for @person.permission do |permission_fields| %>
+    Admin?  : <%= permission_fields.check_box :admin %>
+  <% end %>
+<% end %>
+```
+- `file_field`: `file_field(:user, :avatar) # => <input type="file" id="user_avatar" name="user[avatar]" />`
