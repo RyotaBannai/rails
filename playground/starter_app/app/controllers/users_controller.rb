@@ -1,6 +1,7 @@
 class UsersController < ApplicationController
   before_action :set_user, only: %i[show edit update destroy] # before_actin [method name], [options]
   http_basic_authenticate_with name: "dhh", password: "secret", except: [:index, :show] # basic authentication
+  rescue_from ActiveRecord::RecordNotFound, with: :record_not_found
 
   # GET /users
   # GET /users.json
@@ -71,11 +72,15 @@ class UsersController < ApplicationController
 
   private
 
+  # エラーメッセージを隠す
+  def record_not_found
+    render plain: "404 Not Found", status: 404
+  end
+
   # Use callbacks to share common setup or constraints between actions.
   def set_user
     @user = User.find(params[:id])
   end
-
   # Only allow a list of trusted parameters through.
   def user_params
     params.require(:user).permit(:name, :email)

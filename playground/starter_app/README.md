@@ -4,7 +4,7 @@
 
 - [TOC](#toc)
 - [Many things..](#many-things)
-- [Controller/ View](#controller-view)
+- [Controller](#controller)
 - [Model](#model)
     - [validation](#validation)
         - [条件付きバリデーション](#条件付きバリデーション)
@@ -117,11 +117,23 @@ end
 - `Turbolinks 5`: `data-turbolinks-permanent`を DOM 要素につけることでページ間で保持されるようになり、状態の初期化を必要としないので、より高速に動作する. サイドバーなど、ページ間で固定の要素の場合は、`data-turbolinks-permanent`を付与し、ページ間で保持しない要素は、`data-turbolinks-temporary`をつけると良い
 - `Rails API`: `ActionController::Base`の代わりに`ActionController::API`をコントローラで継承することによって、JSON API サーバー用の軽量な Rails アプリケーションを構築することができる。
 
-### Controller/ View
+- `a ||= b` is equivalent to `a || a = b`. not same as `a = a || b` `@_current_user ||= session[:current_user_id] && User.find_by(id: session[:current_user_id])`
 
+### Controller
+- コントローラの命名規則: 名前の最後の部分に`「複数形」`(モデルの命名規則は`「単数形」`であることが期待される)
+- `new メソッド`の内容が空であるにもかかわらず正常に動作する。これは、Rails では `new アクション`で特に指定のない場合には `new.html.erb` ビューをレンダリングするため。
+- コントローラで`default_url_options`という名前のメソッドを定義すると、URL生成用のグローバルなデフォルトパラメータを設定できる。`ActionController::Base` で定義すれば全ての Controller に適用される。
 - `render` メソッドは非常に単純なハッシュを引数に取ります。ハッシュのキーは`:plain`、ハッシュの値は `params[:article].inspect` です。`params` **メソッド**は、フォームから送信されてきたパラメータ (つまりフォームのフィールド) を表すオブジェクトです。`params` メソッドは `ActionController::Parameters` オブジェクトを返します。文字列またはシンボルを使って、このオブジェクトのハッシュのキーを指定できます。
 - production (本番) 環境など、development 以外の環境に対してもマイグレーションを実行したい場合は、`rails db:migrate RAILS_ENV=production` のように環境変数を明示的に指定する必要があり
 - `strong_parameters`: コントローラのアクションで本当に使ってよいパラメータだけを厳密に指定することを強制する. `params.require(:user).permit(:name, :email)` モデルに対する「`マスアサインメント`」が発生すると、正常なデータの中に悪意のあるデータが含まれてしまう可能性があるため。
+- Controller のメソッドで（update など）で postfix(!) required な params が無い場合、400 コードを返して例外を返すことができる。[ref](https://railsguides.jp/action_controller_overview.html#strong-parameters)
+- 「params の値には許可されたスカラー値の配列を使わなければならない」ことを宣言するには、キーに空の配列を対応付ける。`params.permit(id: [])`
+- `ネストしたパラメータ`: permit にネストした物を渡すことができる。
+```ruby
+params.permit(:name, { emails: [] },
+              friends: [ :name,
+                         { family: [ :name ], hobbies: [] }])
+```  
 - `コントローラの public メソッドは private より前に配置しないといけない。`
 
 ### Model
@@ -1048,3 +1060,21 @@ form_for(@article)
 # => params[:addresses]ハッシュが作成される
 ```
 - `フィールドを動的に追加する`: 残念ながらRailsではこのためのビルトインサポートは用意されていない。フィールドセットをその場で生成する場合は、関連する配列のキーが重複しないよう注意する。これには、JavaScript で現在の日時を取得して数ミリ秒の時差から一意の値を得るのが定番。
+- `flash` の値を別のリクエストにも引き継ぎたい場合は、`keep`メソッドを使う。
+```ruby
+class MainController < ApplicationController
+  def index
+    # すべてのflash値を保持する
+    flash.keep
+    # flash.keep(:notice)
+    redirect_to users_url
+  end
+end
+```
+- `flash.now`: デフォルトでは、flash に値を追加すると`直後のリクエスト`でその値を利用できるが、次のリクエストを待たずに同じリクエスト内でこれらの flash 値にアクセスしたい場合がある。たとえば、create アクションに失敗してリソースが保存されなかった場合に、new テンプレートを直接描画するとする。このとき新しいリクエストは行われないが、この状態でも flash を使ってメッセージを表示したい。このような場合、`flash.now` を使えば通常の `flash` と同じ要領でメッセージを表示できる。
+- セッションを削除する場合は`キーに nil を指定`することで削除。cookie を削除する場合は`cookies.delete(:key)`を使う。
+- `フィルタ`: コントローラにあるアクションの「直前 (before)」、「直後 (after)」、あるいは「直前と直後の両方 (around)」に実行されるメソッド. フィルタは継承される.
+- `skip_before_action メソッド`: 特定のアクションでフィルタをスキップできる。
+- `csrf 対策`: form ヘルパーを使わず手作りした場合や、別の理由でトークンが必要な場合には、`form_authenticity_token`メソッドでトークンを生成できる。
+- `ActiveRecord::RecordNotFound エラー`は、production 環境ではすべて404エラーページが表示されるため、この振る舞いをカスタマイズする必要がない限り、開発者がこのエラーを扱う必要は無い。
+- `HTTPSプロトコルを強制する`: コントローラとのやりとりがHTTPSのみで行われるようにしたい場合は、環境設定の`config.force_ssl`で`ActionDispatch::SSL`ミドルウェアを有効にすることで行うべき。
