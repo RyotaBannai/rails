@@ -31,6 +31,7 @@
     - [ローカライズされたビュー](#ローカライズされたビュー)
     - [render, rendering](#render-rendering)
     - [form](#form)
+    - [パラメータの基本ルール:](#パラメータの基本ルール)
 
 <!-- /TOC -->
 
@@ -851,8 +852,12 @@ image_tag("rails.png") # => <img src="http://assets.example.com/images/rails.png
 <% end %>
 ```
 - `date_select`: select を自動生成 `<%= date_select("article", "published_on") %>`
+- 日付/時刻ヘルパーの場合は、`select_date、select_time、select_datetime` が `ベアボーンヘルパー (最小限の基本機能を持つ)` で、`date_select、time_select、datetime_select` が `モデルオブジェクトヘルパー` に相当。ベアボーンペルパーを使う場合、Controller で日付を params から取り出してモデルインスタンに自分でセットする必要がある。例えば、こんな感じ。`Date.civil(params[:start_date][:year].to_i, params[:start_date][:month].to_i, params[:start_date][:day].to_i)` モデルオブジェクトヘルパー であれば、ここら辺の煩雑な作業をよろしくやってくれるため便利。params からは ハッシュとして受け取ることができる。`{'person' => {'birth_date(1i)' => '2008', 'birth_date(2i)' => '11', 'birth_date(3i)' => '22'}}` Active Record はこれらのパラメータが `birth_date 属性を構成するために使われなければならないこと`を理解し、接尾語（suffix）付きの情報を利用する。
+- ベアボーンヘルパーとモデルオブジェクトヘルパーのオプションは共通。例えば、年のオプションはどちらのファミリーでもデフォルトで現在の年の前後5年が使われ、この範囲が適切でない場合は`:start_year` オプションと `:end_year` オプションを使って上書きできる、など。
+- モデルオブジェクトを扱う場合は date_select を使うべ。その他の場合、たとえば`日付でフィルタするなどの検索フォーム`で使う場合は select_date を使う。
 - `DebugHelper`: YAML からダンプしたオブジェクトを含む pre タグを返す。
 #### FormHelper
+- `form_for` および `fields_for` によって生成されるオブジェクトは、`FormBuilder` (またはそのサブクラス) のインスタンスである。
 - `form_for`:
 ```ruby
 # メモ: @person変数はコントローラ側で設定済みであるとする (@person = Person.newなど)
@@ -1015,3 +1020,31 @@ form_for(@article)
 - `名前空間を扱う`: `form_for [:admin, @article]` ネスト指定てもコンマで宣言すれば良い。
 - PATCH PUT DELETE を使う → `form_tag(search_path, method: "patch")`
 > :include_blankや:promptが指定されていなくても、選択属性requiredがtrueになっていると、:include_blankは強制的にtrueに設定され、表示のsizeは1になり、multipleはtrueになりません。???
+- `ファイルのアップロード`: 出力されるフォームのエンコードは 必ず 「multipart/form-data」でなければならない。form_for　ヘルパーを使えば、この点が自動的に処理される。form_tag でファイルアップロードを行なう場合は、以下の例に示したようにエンコードを明示的に指定する!!!
+```ruby
+<%= form_tag({action: :upload}, multipart: true) do %>
+  <%= file_field_tag 'picture' %>
+<% end %>
+
+<%= form_for @person do |f| %>
+  <%= f.file_field :picture %>
+<% end %>
+```
+- ファイルがアップロードされた後の処理には [CarrierWave](https://github.com/carrierwaveuploader/carrierwave) ライブラリを使うと善い。
+- `Ajaxを扱う`: Ajaxフォームのシリアライズは、ブラウザ内で実行される JavaScript によって行われる。そしてブラウザの JavaScript は(危険を避けるため)ローカルのファイルにアクセスできないようになっているので、JavaScript からはアップロードファイルを読み出せ無い。これを回避する方法として最も一般的な方法は、非表示の iframe をフォーム送信の対象として使う。
+#### パラメータの基本ルール:
+- 重複したパラメータ名は無視される。
+- パラメータ名に空の角かっこ`[ ]`が含まれている場合、パラメータは配列の中にまとめられる。
+```ruby
+<input name="person[phone_number][]" type="text"/>
+<input name="person[phone_number][]" type="text"/>
+<input name="person[phone_number][]" type="text"/>
+# => params[:person][:phone_number]が電話番号の配列
+```
+```ruby
+<input name="addresses[][line1]" type="text"/>
+<input name="addresses[][line2]" type="text"/>
+<input name="addresses[][city]" type="text"/>
+# => params[:addresses]ハッシュが作成される
+```
+- `フィールドを動的に追加する`: 残念ながらRailsではこのためのビルトインサポートは用意されていない。フィールドセットをその場で生成する場合は、関連する配列のキーが重複しないよう注意する。これには、JavaScript で現在の日時を取得して数ミリ秒の時差から一意の値を得るのが定番。
