@@ -5,6 +5,8 @@
 - [TOC](#toc)
 - [Many things..](#many-things)
 - [Controller](#controller)
+    - [パラメータの基本ルール:](#パラメータの基本ルール)
+    - [Route](#route)
 - [Model](#model)
     - [validation](#validation)
         - [条件付きバリデーション](#条件付きバリデーション)
@@ -31,7 +33,6 @@
     - [ローカライズされたビュー](#ローカライズされたビュー)
     - [render, rendering](#render-rendering)
     - [form](#form)
-    - [パラメータの基本ルール:](#パラメータの基本ルール)
 
 <!-- /TOC -->
 
@@ -135,6 +136,196 @@ params.permit(:name, { emails: [] },
                          { family: [ :name ], hobbies: [] }])
 ```  
 - `コントローラの public メソッドは private より前に配置しないといけない。`
+#### パラメータの基本ルール:
+- 重複したパラメータ名は無視される。
+- パラメータ名に空の角かっこ`[ ]`が含まれている場合、パラメータは配列の中にまとめられる。
+```ruby
+<input name="person[phone_number][]" type="text"/>
+<input name="person[phone_number][]" type="text"/>
+<input name="person[phone_number][]" type="text"/>
+# => params[:person][:phone_number]が電話番号の配列
+```
+```ruby
+<input name="addresses[][line1]" type="text"/>
+<input name="addresses[][line2]" type="text"/>
+<input name="addresses[][city]" type="text"/>
+# => params[:addresses]ハッシュが作成される
+```
+- `フィールドを動的に追加する`: 残念ながらRailsではこのためのビルトインサポートは用意されていない。フィールドセットをその場で生成する場合は、関連する配列のキーが重複しないよう注意する。これには、JavaScript で現在の日時を取得して数ミリ秒の時差から一意の値を得るのが定番。
+- `flash` の値を別のリクエストにも引き継ぎたい場合は、`keep`メソッドを使う。
+```ruby
+class MainController < ApplicationController
+  def index
+    # すべてのflash値を保持する
+    flash.keep
+    # flash.keep(:notice)
+    redirect_to users_url
+  end
+end
+```
+- `flash.now`: デフォルトでは、flash に値を追加すると`直後のリクエスト`でその値を利用できるが、次のリクエストを待たずに同じリクエスト内でこれらの flash 値にアクセスしたい場合がある。たとえば、create アクションに失敗してリソースが保存されなかった場合に、new テンプレートを直接描画するとする。このとき新しいリクエストは行われないが、この状態でも flash を使ってメッセージを表示したい。このような場合、`flash.now` を使えば通常の `flash` と同じ要領でメッセージを表示できる。
+- セッションを削除する場合は`キーに nil を指定`することで削除。cookie を削除する場合は`cookies.delete(:key)`を使う。
+- `フィルタ`: コントローラにあるアクションの「直前 (before)」、「直後 (after)」、あるいは「直前と直後の両方 (around)」に実行されるメソッド. フィルタは継承される.
+- `skip_before_action メソッド`: 特定のアクションでフィルタをスキップできる。
+- `csrf 対策`: form ヘルパーを使わず手作りした場合や、別の理由でトークンが必要な場合には、`form_authenticity_token`メソッドでトークンを生成できる。
+- `ActiveRecord::RecordNotFound エラー`は、production 環境ではすべて404エラーページが表示されるため、この振る舞いをカスタマイズする必要がない限り、開発者がこのエラーを扱う必要は無い。
+- `HTTPSプロトコルを強制する`: コントローラとのやりとりがHTTPSのみで行われるようにしたい場合は、環境設定の`config.force_ssl`で`ActionDispatch::SSL`ミドルウェアを有効にすることで行うべき。
+
+#### Route
+- Rails のルーターは受け取った URL を認識し、適切なコントローラ内アクションや Rack アプリケーションに割り当てる。
+- `複数のリソース`を同時に定義: `resources :photos, :books, :videos`
+- `単数形リソース`: `get 'profile', to: 'users#show'`
+- `resource` と `resources` は割り当てが異なるので注意
+- 複数形リソースの場合と同様に、単数形リソースでも _path ヘルパーに対応する _url ヘルパーが使える。_url ヘルパーは、_path の前に現在のホスト名、ポート番号、パスのプレフィックスが追加されている点が異なる。
+- コントローラの名前空間とルーティング: /admin/* にアクセスした時に /Admin 配下の Controller (Admin::ArticlesController) を探す。
+```ruby
+namespace :admin do
+  resources :articles, :comments
+end
+```
+- (/adminが前についていない) `/articles` を Admin::ArticlesController にルーティングしたい場合 `resources :articles, module: 'admin'` またはブロックで書いた場合、
+```ruby
+scope module: 'admin' do
+  resources :articles, :comments
+end
+```
+- `/admin/articles` を (Admin::なしの) ArticlesControllerにルーティングしたい場合 `resources :articles, path: '/admin/articles'` またはブロックで書いた場合、
+```ruby
+scope '/admin' do
+  resources :articles, :comments
+end
+```
+- `ネストしたリソース`: ヘルパーは `magazine_ads_url` や `edit_magazine_ad_path` のような名前になる。[ref](https://railsguides.jp/routing.html#%E3%83%8D%E3%82%B9%E3%83%88%E3%81%97%E3%81%9F%E3%83%AA%E3%82%BD%E3%83%BC%E3%82%B9)
+```ruby
+class Magazine < ApplicationRecord
+  has_many :ads
+end
+
+class Ad < ApplicationRecord
+  belongs_to :magazine
+end
+```
+```ruby
+resources :magazines do
+  resources :ads
+end
+```
+- `「浅い」ネスト`: id などを url に含まない（index/new/createのような idを必要としないアクション）`verb` のみをネスト化する。これによりコレクションだけが階層化のメリットを受けられる。(`/publishers/1/magazines/2/photos/3`のような深いネストを回避)
+```ruby
+resources :articles do
+  resources :comments, only: [:index, :new, :create]
+end
+resources :comments, only: [:show, :edit, :update, :destroy]
+```
+- または `shallow オプション`を使用
+```ruby
+resources :articles do
+  resources :comments, shallow: true
+end
+```
+- DSL (ドメイン固有言語) である `shallow メソッド` をルーティングで使うと、すべてのネストが浅くなるように内側にスコープを1つ作成する。
+```ruby
+shallow do
+  resources :articles do
+    resources :comments
+    resources :quotes
+    resources :drafts
+  end
+end
+```
+- `scope メソッド` には、「浅い」ルーティングをカスタマイズするためのオプションが2つある。深くなるネストの url に追加するか、helper に追加するかの２種類
+1. `:shallow_path オプション`: ex. get path => `/sekret/comments/:id(.:format)`
+```ruby
+scope shallow_path: "sekret" do
+  resources :articles do
+    resources :comments, shallow: true
+  end
+end
+```
+2. `:shallow_prefix オプション`: ex. get helper => `sekret_comment_path`
+```ruby
+scope shallow_prefix: "sekret" do
+  resources :articles do
+    resources :comments, shallow: true
+  end
+end
+```
+- `routing concern`: concern を使うことで、他のリソースやルーティング内で使いまわせる共通のルーティングを宣言できる。concern はルーティング内のどの場所にでも配置できる。
+- `オブジェクトからパスとURLを作成`: id を渡す代わりに `<%= link_to 'Ad details', magazine_ad_path(@magazine, @ad) %>` とする
+- `url_for` を使うとシンプルになる: `<%= link_to 'Ad details', url_for([@magazine, @ad]) %>`
+- もっとシンプルな方法: `<%= link_to 'Ad details', [@magazine, @ad] %>`
+- それ以外のアクションであれば、配列の最初の要素にアクション名を挿入: `<%= link_to 'Edit Ad', [:edit, @magazine, @ad] %>`
+- `RESTful なルーティングにメンバーを追加`:
+1. `メンバー (member) ルーティング`
+```ruby
+resources :photos do
+  member do
+    get 'preview'
+  end
+end
+```
+> 上のルーティングは GET リクエストとそれに伴う /photos/1/preview を認識し、リクエストを Photos コントローラの preview アクションにルーティングし、リソース id 値を params[:id] に渡します。同時に、preview_photo_url ヘルパーと preview_photo_path ヘルパーも作成されます
+2. `コレクションルーティング`
+```ruby
+resources :photos do
+  collection do
+    get 'search'
+  end
+end
+```
+> 上のルーティングは、GETリクエスト+/photos/searchなどの (idを伴わない) パスを認識し、リクエストをPhotosコントローラのsearchアクションにルーティングします。このときsearch_photos_urlやsearch_photos_pathルーティングヘルパーも同時に作成されます。
+
+> 第1引数として resource ルーティングをシンボルで定義する場合は、文字列で定義した場合と同等ではなくなる点にご注意ください。文字列はパスとして推測されますが、シンボルはコントローラのアクションとして推測されます。
+- `名前付きルーティング`: `:as`オプションを使う `get 'exit', to: 'sessions#destroy', as: :logout` `logout_path` を呼び出すと `/exit` が返される。
+- `HTTP動詞を制限する`: `match` メソッドと `:via` オプションを使うことで、複数の HTTP 動詞に同時にマッチするルーティングを作成できる。`match 'photos', to: 'photos#show', via: [:get, :post]`
+- `セグメントを制限`: `get 'photos/:id', to: 'photos#show', constraints: { id: /[A-Z]\d{5}/ }` 
+- `ルーティンググロブとワイルドカードセグメント`: ルーティンググロブ (route globbing) とはワイルドカード展開のことであり、ルーティングのある位置から下のすべての部分に特定のパラメータをマッチさせる際に使う。 `get 'photos/*other', to: 'photos#unknown'` `get '*a/foo/*b', to: 'test#index'` とすると `params[:a]` のようにマッチした動的セグメントを取り出すことができる。
+- `使うコントローラを指定`: `resources :photos, controller: 'images'` 名前空間内のコントローラの場合は、`resources :user_permissions, controller: 'admin/user_permissions'`
+- `newセグメントやeditセグメントをオーバーライド`: `resources :photos, path_names: { new: 'make', edit: 'change' }` このオプションによる変更をすべてのルーティングに統一的に適用したくなった場合は、スコープを使う。
+```ruby
+scope path_names: { new: 'make' } do
+  # 残りすべてのルーティング
+end
+```
+- `名前付きルーティングヘルパーにプレフィックスを追加`
+```ruby
+scope 'admin' do
+  resources :photos, as: 'admin_photos'
+end
+# => admin_photos_path や new_admin_photo_path などのルーティングヘルパーを生成
+```
+- `ルーティングヘルパーのグループにプレフィックスを追加`: `scope メソッド`で `:as オプション`を使う。
+```ruby
+scope 'admin', as: 'admin' do
+  resources :photos, :accounts
+end
+
+resources :photos, :accounts
+# => admin_photos_path と admin_accounts_path などのルーティングを生成。これらは /admin/photos と /admin/accounts にそれぞれ割り当てられる。
+```
+- `パスを変更`: 
+```ruby
+scope(path_names: { new: 'neu', edit: 'bearbeiten' }) do
+  resources :categories, path: 'kategorien'
+end
+```
+- `「単数形のフォーム」をオーバーライド`:  
+```ruby
+ActiveSupport::Inflector.inflections do |inflect|
+  inflect.irregular 'tooth', 'teeth'
+end
+```
+- `名前付きルーティングのパラメータをオーバーライド`: ex id => identifier
+```ruby
+# routes
+resources :videos, param: :identifier
+
+# Controller
+Video.find_by(identifier: params[:identifier])
+```
+- routes の確認: `http://localhost:3000/rails/info/routes` をブラウザで開く。または、ターミナルで `rails routes --expanded` コマンド `-g（grepオプション）`を使ってルーティングを検索 `$ rails routes -g POST` 特定のコントローラに対応するルーティングだけを表示したい場合は、`-c オプション` => `$ rails routes -c users`
+
+
 
 ### Model
 
@@ -1044,37 +1235,3 @@ form_for(@article)
 ```
 - ファイルがアップロードされた後の処理には [CarrierWave](https://github.com/carrierwaveuploader/carrierwave) ライブラリを使うと善い。
 - `Ajaxを扱う`: Ajaxフォームのシリアライズは、ブラウザ内で実行される JavaScript によって行われる。そしてブラウザの JavaScript は(危険を避けるため)ローカルのファイルにアクセスできないようになっているので、JavaScript からはアップロードファイルを読み出せ無い。これを回避する方法として最も一般的な方法は、非表示の iframe をフォーム送信の対象として使う。
-#### パラメータの基本ルール:
-- 重複したパラメータ名は無視される。
-- パラメータ名に空の角かっこ`[ ]`が含まれている場合、パラメータは配列の中にまとめられる。
-```ruby
-<input name="person[phone_number][]" type="text"/>
-<input name="person[phone_number][]" type="text"/>
-<input name="person[phone_number][]" type="text"/>
-# => params[:person][:phone_number]が電話番号の配列
-```
-```ruby
-<input name="addresses[][line1]" type="text"/>
-<input name="addresses[][line2]" type="text"/>
-<input name="addresses[][city]" type="text"/>
-# => params[:addresses]ハッシュが作成される
-```
-- `フィールドを動的に追加する`: 残念ながらRailsではこのためのビルトインサポートは用意されていない。フィールドセットをその場で生成する場合は、関連する配列のキーが重複しないよう注意する。これには、JavaScript で現在の日時を取得して数ミリ秒の時差から一意の値を得るのが定番。
-- `flash` の値を別のリクエストにも引き継ぎたい場合は、`keep`メソッドを使う。
-```ruby
-class MainController < ApplicationController
-  def index
-    # すべてのflash値を保持する
-    flash.keep
-    # flash.keep(:notice)
-    redirect_to users_url
-  end
-end
-```
-- `flash.now`: デフォルトでは、flash に値を追加すると`直後のリクエスト`でその値を利用できるが、次のリクエストを待たずに同じリクエスト内でこれらの flash 値にアクセスしたい場合がある。たとえば、create アクションに失敗してリソースが保存されなかった場合に、new テンプレートを直接描画するとする。このとき新しいリクエストは行われないが、この状態でも flash を使ってメッセージを表示したい。このような場合、`flash.now` を使えば通常の `flash` と同じ要領でメッセージを表示できる。
-- セッションを削除する場合は`キーに nil を指定`することで削除。cookie を削除する場合は`cookies.delete(:key)`を使う。
-- `フィルタ`: コントローラにあるアクションの「直前 (before)」、「直後 (after)」、あるいは「直前と直後の両方 (around)」に実行されるメソッド. フィルタは継承される.
-- `skip_before_action メソッド`: 特定のアクションでフィルタをスキップできる。
-- `csrf 対策`: form ヘルパーを使わず手作りした場合や、別の理由でトークンが必要な場合には、`form_authenticity_token`メソッドでトークンを生成できる。
-- `ActiveRecord::RecordNotFound エラー`は、production 環境ではすべて404エラーページが表示されるため、この振る舞いをカスタマイズする必要がない限り、開発者がこのエラーを扱う必要は無い。
-- `HTTPSプロトコルを強制する`: コントローラとのやりとりがHTTPSのみで行われるようにしたい場合は、環境設定の`config.force_ssl`で`ActionDispatch::SSL`ミドルウェアを有効にすることで行うべき。
