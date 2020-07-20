@@ -33,6 +33,7 @@
     - [ローカライズされたビュー](#ローカライズされたビュー)
     - [render, rendering](#render-rendering)
     - [form](#form)
+- [Active Support](#active-support)
 
 <!-- /TOC -->
 
@@ -1235,3 +1236,118 @@ form_for(@article)
 ```
 - ファイルがアップロードされた後の処理には [CarrierWave](https://github.com/carrierwaveuploader/carrierwave) ライブラリを使うと善い。
 - `Ajaxを扱う`: Ajaxフォームのシリアライズは、ブラウザ内で実行される JavaScript によって行われる。そしてブラウザの JavaScript は(危険を避けるため)ローカルのファイルにアクセスできないようになっているので、JavaScript からはアップロードファイルを読み出せ無い。これを回避する方法として最も一般的な方法は、非表示の iframe をフォーム送信の対象として使う。
+
+### Active Support
+> Ruby on Rails アプリケーションでは、基本的にすべての Active Support を読み込みます。例外は config.active_support.bare を true に設定した場合です。このオプションを  true にすると、フレームワーク自体が必要とするまでアプリケーションは拡張機能を読み込みません。また上で解説したように、読み込まれる拡張機能はあらゆる粒度で選択されます。
+- [ref](https://railsguides.jp/active_support_core_extensions.html)
+- `instance_values`: クラスのインスタンス変数をハッシュにして返す。
+```ruby
+class C
+  def initialize(x, y)
+    @x, @y = x, y
+  end
+end
+C.new(0, 1).instance_values # => {"x" => 0, "y" => 1}
+```
+- `instance_variable_names`: インスタンス変数名を先頭に `@` をつけて返す。
+- `suppress` : 例外の発生を止める。あるブロックの実行時に例外が発生し、その例外が(`kind_of? で判定`)いずれかの引数に一致する場合、それをキャプチャして例外を発生せずに戻る。一致しない場合、例外はキャプチャしない。
+```ruby
+# ユーザーがロックされていればインクリメントしない
+suppress(ActiveRecord::StaleObjectError) do
+  current_user.increment! :visits
+end
+```
+- `ActiveRecord::StaleObjectError`: 楽観的ロックで特定のデータが別の場所で更新されてバージョンアップされている時（`lock_version`）に吐くエラー。table の 定義に `t.integer :lock_version, default: 0` として　lock_version カラムを用意する。
+```ruby
+dog1 = Dog.create!(name: 'poti') # id: 1
+dog1_found = Dog.find(1)
+dog1_found.update(name: "korosuke")
+dog1.update(name: "poti") # => ActiveRecord::StaleObjectError
+```
+- `in?`: あるオブジェクトが他のオブジェクトに含まれているかどうかを確認。渡された引数が `include?` が使えないオブジェクト（[],"...", Num...Num などの Iterable オブジェクト以外）使用すると　`ArgumentError 例外`
+- `alias_attribute`: モデルの属性の別名 (alias) を作成。
+```ruby
+class User < ApplicationRecord
+  # emailカラムを"login"という名前でも参照したい　=> 認証のコードがわかりやすくなる
+  alias_attribute :login, :email
+end
+```
+- `内部属性`: クラスの継承でクラス無いの同名の属性名が衝突し無いためにある。
+  - `attr_internal_reader`、`attr_internal_writer`、`attr_internal_accessor`というマクロが定義されている。ライブラリは通常 `attr_accessor` の代わりに `attr_internal` を使用する。
+  - `attr_*`と振る舞いは同様
+  - `内部インスタンス変数`の名前にはデフォルトで冒頭に`アンダースコア`が追加される。例えば、`@_log_level` この動作は `Module.attr_internal_naming_format` で変更することもできる。`sprintf` と同様のフォーマット文字列を与え、冒頭に`@`を置き、それ以外の名前を置きたい場所に`%s`を置く。デフォルト値は `@_%s`
+- `モジュール属性`: `mattr_reader`、`mattr_writer`、`mattr_accessor`という3つのマクロは、クラス用に定義される`cattr_*`マクロと同じ。`cattr_*`マクロは単なる`mattr_*`マクロの別名。
+- `module_parent`メソッド: 親モジュールを定数形式で返す。
+  - モジュールが無名またはトップレベルの場合 `Object` を返す。
+  - `module_parents`: 全親を配列形式にして返す。
+  - `module_parent_name` も同様の動きをするが、モジュールが無名またはトップレベルの場合 `nil` を返す。
+```ruby
+module X
+  module Y
+    module Z
+    end
+  end
+end
+M = X::Y::Z
+
+X::Y::Z.module_parent # => X::Y
+M.module_parent       # => X::Y
+```
+- `無名モジュール`: 名前が無いモジュール。`Module.new.name # => nil`
+  - `anonymous?`でチェック `Module.new.anonymous? # => true`
+  - 無名モジュールは、定義上必ず到達不能（unreachable）(到達不能なモジュールが必ずしも無名と言うわけでは無い)
+- `メソッドの委譲 (delegate)`: `関連モデルの属性`を`自分のモデルの属性`として使えるようにするための機能。
+  - 委譲するメソッドは対象クラス内で `public` でないといけない。
+  - 委譲時に `NoMethodError` が発生して対象が `nil` の場合、例外が発生。`:allow_nil` オプションを使うと、例外の代りに `nil` を返す
+  - `:prefix` オプションを `true` にすると、生成されたメソッドの名前にプレフィックスを追加。`delegate :street, to: :address, prefix: true` `street` ではなく`address_street` を生成
+    - `プレフィックスをカスタマイズ`: `delegate :size, to: :attachment, prefix: :avatar` => `avatar_size`
+  - 委譲されたメソッドはデフォルトで `public`
+  - `:private` オプションでメソッドのスコープを変更
+  - `User` オブジェクトにないものを `Profile` にあるものにすべて委譲したい! `delegate_missing_to` マクロを使う。オブジェクト内にある呼び出し可能なもの（`インスタンス変数`、`メソッド`、`定数`などで、スコープが public）なら何でも対象。
+```ruby 
+class User < ApplicationRecord
+  has_one :profile
+end
+
+class User < ApplicationRecord
+  has_one :profile
+  def name
+    profile.name # delegate
+  end
+end
+# \\\ ↓ ///
+class User < ApplicationRecord
+  has_one :profile
+  delegate :name, to: :profile
+  # delegate :name, :age, :address, :twitter, to: :profile # => 複数移譲
+end
+```
+- `メソッドの再定義`: 
+  - `define_method` で再定義するとき、その名前が既にあると警告が出る。
+  - `redefine_method` メソッドを使うと、必要に応じて既存のメソッドが削除されるから警告表示は出ない。
+  - （delegateを使っているなどの理由で）メソッド自身の置き換えを定義する必要がある場合は、`silence_redefinition_of_method` を使うこともできる。
+- `class_attribute` メソッドは、1つ以上の継承可能なクラスの属性を宣言
+  - クラス変数を上書きするときは継承したサブクラスの値も上書きするため注意 !!!
+  - これらの属性はインスタンスのレベルでアクセスまたはオーバーライドできる
+    - `:instance_writer`を `false`に設定すれば、`writerインスタンスメソッド`は生成されない。`:instance_reader` も同様。これらを使用しようとすると `NoMethodError` が発生。
+    - インスタンス述語が不要な場合: `instance_predicate: false`を指定
+    - `x?` のように class_attribute はインスタンスの reader が返すものを「二重否定」（!!、 double-bang、二重感嘆符）するインスタンス述語も定義されている。true か false のどちらか論理値にして返す。
+```ruby
+class A
+  class_attribute :x
+end
+class B < A; end
+class C < B; end
+
+A.x = :a
+B.x # => :a
+C.x # => :a
+
+B.x = :b
+A.x # => :a
+C.x # => :b
+
+C.x = :c
+A.x # => :a
+B.x # => :b
+```
