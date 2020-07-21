@@ -1351,3 +1351,27 @@ C.x = :c
 A.x # => :a
 B.x # => :b
 ```
+- cattr_reader、cattr_writer、cattr_accessor は attr_*　と似ているが、クラス用である
+ - `cattr_accessor :emulate_booleans, default: true` とすると デフォルト値をセットすることができる
+ - 利便性のため、このとき`インスタンスメソッド`も生成されるが、これらは実際にはクラス属性の単なるプロキシである。このため、インスタンスからクラス属性を変更することはできるが、`class_attribute` で行われるように上書きすることはできない
+ - ビューで `cattr_accessor` で宣言した属性にアクセスできる
+ - `:instance_reader` オプションを false に設定することで、reader インスタンスメソッドが生成されないようにできる。`:instance_writer` オプション、`:instance_accessor`オプションでも同様。
+ - `:instance_accessor` を false に設定すると、モデルの属性設定時にマスアサインメントを防止するのに便利
+- `subclasses`: subclasses メソッドはレシーバのサブクラスを返す
+```ruby
+class C; end
+C.subclasses # => []
+class B < C; end
+C.subclasses # => [B]
+class A < B; end
+C.subclasses # => [B]
+```
+- `descendants`: descendants メソッドは、そのレシーバより`下位にあるすべてのクラス`（`直接継承しているかどうかに関わらない`と言うこと）を返す
+```ruby
+class C; end
+C.descendants # => []
+class B < C; end
+C.descendants # => [B]
+class A < B; end
+C.descendants # => [B, A]
+```
