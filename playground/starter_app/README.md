@@ -34,6 +34,7 @@
     - [render, rendering](#render-rendering)
     - [form](#form)
 - [Active Support](#active-support)
+    - [安全な文字列](#安全な文字列)
 
 <!-- /TOC -->
 
@@ -1375,3 +1376,39 @@ C.descendants # => [B]
 class A < B; end
 C.descendants # => [B, A]
 ```
+#### 安全な文字列
+- 与えられた文字列に `html_safe` メソッドを適用することで、安全な文字列を得ることができる
+  - ここで注意しなければならないのは、`html_safe` メソッドそれ自体は何らエスケープを行なっていないということ。安全であるとマーキングしているだけで、開発者が意図的に安全であることを認識している時に使用される。
+  - 安全であると宣言された文字列に対し、安全でない文字列を `concat / << + `で破壊的に追加すると、結果は安全な文字列になるため、安全でない引数は追加時にエスケープされる
+  - 現在の Rails のビューでは、安全でない値は自動的にエスケープされる
+  - ビューでエスケープさせたく無い場合は、raw ヘルパーを使う。または `<%==` (raw ヘルパーは、内部で html_safe を呼び出している)
+  - downcase、gsub、strip、chomp、underscore などの変換メソッドは文字列を変換するため、危険な文字列へ変換しないように注意する。また、`gsub!` のような破壊的な変換を行なうメソッドを使うと、レシーバ自体が安全でなくなってしまう。`こうしたメソッドを実行すると、実際に変換が行われたかどうかにかかわらず、安全を表すビットは常にオフになる` !!!
+  - `変換と強制`: 
+    - 安全な文字列に対して `to_s` を実行した場合は、安全な文字列が返される。
+    - 安全な文字列に対して `to_str` による強制的な変換を実行した場合には安全でない文字列が返される。
+  - `コピー`:
+    - 安全な文字列に対して `dup` または `clone` を実行した場合は、安全な文字列が生成される。
+```ruby
+s = "".html_safe
+s.html_safe? # => true
+
+s = "<script>...</script>".html_safe
+s.html_safe? # => true
+s            # => "<script>...</script>"
+
+"".html_safe + "<" # => "&lt;"
+
+<%= raw @cms.current_template %> <%# @cms.current_templateをそのまま挿入 %>
+<%== @cms.current_template %> <%# @cms.current_templateをそのまま挿入 %>
+```
+- `squish メソッド`: 冒頭と末尾のホワイトスペースを除去し、連続したホワイトスペースを1つに減らす
+- `truncateメソッド`: 指定された length にまで長さを切り詰めたレシーバのコピーを返す
+  - `:omission オプション`: 省略文字 `(...)` をカスタマイズ
+  - `:separator`: 自然な区切り位置で切り詰めることができる（単語が切れない）正規表現も使える。`"Oh dear! Oh dear! I shall be late!".truncate(18, separator: /\s/)`
+- `inquiry`: 文字列を `StringInquirer オブジェクト`に変換。このオブジェクトを使うと、等しいかどうかをよりスマートにチェックできる
+```ruby
+"production".inquiry.production? # => true
+"active".inquiry.inactive?       # => false
+```
+- `start_with?`と`end_with?`もある。
+- `at(position)`: 対象となる文字列のうち、`position`で指定された位置にある文字を返す
