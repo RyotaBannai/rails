@@ -39,9 +39,31 @@
 <!-- /TOC -->
 
 ### Many things..
-
+- `レシーバ`: インスタンスメソッドを利用するインスタンス自身のこと
+```ruby
+re = "9"
+# 以下の式のレシーバは str
+re.to_i #=> 9
+```
+- `self`: model クラスの中でメソッドを定義する際に、メソッド名の頭に`self.`を付けると`クラスメソッド` 付けないと`インスタンスメソッド``
+  - `メソッド内でselfを使用する場合`: クラスメソッド内で self を使うと`クラス`を指し、インスタンスメソッド内で self はその`インスタンス`になる
 - Hashes are indexed using the square brackets (`[]`) and accessing either the `string literal` you used for the key, or the `symbol`.
-
+- `シンボル`（`:`）: 同じオブジェクトとして扱いたい場合に使う。（= 複数あると困るものに使う。つまりハッシュのキー）[ref](https://uxmilk.jp/25934)
+```ruby
+ms_suzuki = "Yoshiko"
+ms_takahashi = "Yoshiko"
+ms_suzuki.equal? ms_takahashi
+=> false
+# シンボルを使うとシングルトンオブジェクトをアサインできる
+ms_suzuki = :Yoshiko
+ms_takahashi = :Yoshiko
+ms_suzuki.equal? ms_takahashi
+=> true
+#重複して困るものにはシンボルを採用する
+our_name= { :my_name => 'Ahiru', :his_name => 'Kitsune', :my_nephew => 'Yamori' }
+p our_name[:my_name]
+```
+- ruby のハッシュの宣言方法
 ```ruby
 # how to define?
 hash = { 'key1' => 'value1', 'key2' => 'value2' }
@@ -1411,4 +1433,162 @@ s            # => "<script>...</script>"
 "active".inquiry.inactive?       # => false
 ```
 - `start_with?`と`end_with?`もある。
-- `at(position)`: 対象となる文字列のうち、`position`で指定された位置にある文字を返す
+- `at(position)`: 対象となる文字列のうち、`position`で指定された位置にある文字を返す. `"hello".at(0) # => "h"` `"hello".at(0..2) # => "hel"`
+- `from(position)`: position で指定された一から始まる部分文字列を返す `"hello".from(0) # => "hello"`
+- `to(position)`: positionで 指定された位置を終端とする部分文字列を返す `"hello".to(0) # => "h"`
+- ActiveSupportのString拡張(活用形)まとめ [参考](https://qiita.com/hana-da/items/ec9ac3e1c8803f5fa1fc)
+- `"SSLError".underscore.camelize` は、"SslError" となるため元に戻らない。こう言うときは、`acronym` を使う。
+  - `acronym` をやっておくと humanize でも上手く調整できる. `'ssl_error'.humanize # => "SSL error"`
+```ruby
+ActiveSupport::Inflector.inflections do |inflect|
+  inflect.acronym 'SSL'
+end
+"SSLError".underscore.camelize # => "SSLError"
+```
+- `underscore`: `::`は`\`へ変換される。`"Backoffice::Session".underscore` → `"backoffice/session"`
+  - 小文字で始まる文字列も扱える: `"visualEffect".underscore` # => `"visual_effect"`
+- `tableize` ⇄ `classify`(モデル名を取得できる。常に単数系)
+  - フルパスの (qualified) テーブル名も扱える: `"highrise_production.companies".classify # => "Company"`
+  - `classify` が返すクラス名は文字列であることにご注意。得られた文字列に対して `constantize` を実行することで本当のクラスオブジェクトを得られる。
+- date conversion: 
+  - `"2010-07-27".to_date`
+  - `1.month.from_now`
+  - `(4.months + 5.weeks).from_now`
+- format:
+  - `1235551234.to_s(:phone, area_code: true) # => (123) 555-1234`
+  - `1235551234.to_s(:phone, delimiter: " ") # => 123 555 1234`
+  - `12345678.to_s(:delimited) # => 12,345,678`
+  - `111.2345.to_s(:rounded, precision: 2) # => 111.23`
+  - `1.ordinal # => "st"`. `ordinalize` もある
+- `enumerable`
+  - `(1..5).sum {|n| n * 2 } # => 30`
+  - `[2, 4, 6, 8, 10].sum    # => 30`
+- `fetch`: キーが存在するかどうか判別する。
+```ruby
+h = {one: nil}
+p h[:one],h[:two]                        #=> nil,nil これではキーが存在するのか判別できない。
+p h.fetch(:one)                          #=> nil
+p h.fetch(:two)                          # エラー key not found (KeyError)
+```
+- `dig`: hash と array に対し、value に簡単に取得する
+```ruby
+h = { foo: {bar: {baz: 1}}}
+
+h.dig(:foo, :bar, :baz)      # => 1
+h.dig(:foo, :zot, :xyz)      # => nil
+
+g = { foo: [10, 11, 12] }
+g.dig(:foo, 1)  
+```
+- `select, keep_if` は `filter` のような動きと同じ [ref](https://qiita.com/jnchito/items/02ba8aad634a6bd8a2f6)
+- `assoc`: Returns the first contained array that matches (that is, the first associated array), or nil if no match is found
+  - `rassoc` は value を元に探す（Returns the first contained array）
+```ruby
+s1 = [ "colors", "red", "blue", "green" ]
+s2 = [ "letters", "a", "b", "c" ]
+s3 = "foo"
+a  = [ s1, s2, s3 ]
+a.assoc("letters")  #=> [ "letters", "a", "b", "c" ] # 初めの要素をキーとして検索して、マッチした配列全てを返す
+a.assoc("foo")      #=> nil
+```
+- `compact`: `[ "a", nil, "b", nil, "c", nil ].compact #=> [ "a", "b", "c" ]`
+- `&:メソッド名` はブロック変数渡しより若干高速 [ref](https://github.com/rails/rails/pull/32337)
+- `merge` じゃなく `[]=` を使う
+```ruby
+hash = {key: 'value'}
+hash[:new_ley] = 'new value'
+```
+- `index_by メソッド`: 何らかのキーによってインデックス化された enumerable の要素を持つハッシュを生成
+- `index_withメソッド`: enumerable の要素をキーとして持つハッシュを生成
+- `User.exists?(email: params[:email])`: このような `シンタックスシュガー`は、多数の引数が順序に依存することを避け、名前付きパラメータをエミュレートするインターフェイスを提供するために Rails で多用されています。特に、末尾にオプションのハッシュを置くというのは定番中の定番. しかし、あるメソッドが受け取る引数の数が固定されておらず、メソッド宣言で`*`が使われていると、そのような波かっこなしの`オプションハッシュ`は引数の配列の末尾の要素になってしまい、ハッシュとして認識されなくなってしまう。このような場合、`extract_options!`メソッドは、配列の最後の項目の型をチェックする。それがハッシュの場合、そのハッシュを取り出して返し、それ以外の場合は空のハッシュを返す。
+- `to_formatted_s` メソッドはデフォルトでは`to_s`と同様に振る舞い
+  - :db シンボルを引数に渡すと Active Record オブジェクトのコレクションに対して id に応答する項目を返す。
+```ruby
+user = User.find(1)
+[user].to_formatted_s(:db) # => 1
+```
+- `Array.wrap`: `to_ary` から返された値が nil でも Array オブジェクトでもない場合、`Kernel#Array`は例外を発生。`Array.wrap`は例外を発生せずに単にその値を返す。([])
+```ruby
+Array.wrap(foo: :bar) # => [{:foo=>:bar}]
+Array(foo: :bar)      # => [[:foo, :bar]]
+[*{:foo=>:bar}]       # => [[:foo, :bar]]
+```
+- `in_groups_of`: `(1..7).to_a.in_groups_of(3, 0) # => [[1, 2, 3], [4, 5, 6], [7, 0, 0]]`
+- `in_groups`: `(1..7).to_a.in_groups(3, 0)       # => [[1, 2, 3], [4, 5, 0], [6, 7, 0]]`
+  - `(1..7).to_a.in_groups(3, false)              # => [[1, 2, 3], [4, 5], [6, 7]]`
+- `split`: 指定のセパレータで配列を分割 `(-5..5).to_a.split { |i| i.multiple_of?(4) } # => [[-5], [-3, -2, -1], [1, 2, 3], [5]]` 4 で split するため, 4 はメンバーから消える。4 が続くときは からの配列 `[]` が間に入る。
+
+- merge: `{a: 1, b: 1}.merge(a: 0, c: 2)` merge　でキーが衝突した場合、`引数のハッシュのキーが優先される`。（= レシーバは上書きされる）
+- deep_merge: レシーバと引数の両方に同じキーが出現し、さらに`どちらも値がハッシュである場合`(どちらかが hash じゃ無い場合は レシーバは上書きされる)に、その下位のハッシュをマージしたものが、最終的なハッシュの値として使われる。`{a: {b: 1}}.deep_merge(a: {c: 2})　# => {:a=>{:b=>1, :c=>2}}` どちらも値がハッシュである限り deep_merge は再起的に merge する。`{a: {b: {e: 'f'}}}.deep_merge(a: {b: {c: 'd'}}) # => {:a=>{:b=>{:e=>"f", :c=>"d"}}}`
+- `except`: 引数で指定されたキーがあればレシーバのハッシュから取り除く `{a: 1, b: 2}.except(:a) # => {:b=>2}`
+- `with_indifferent_access`: ハッシュに文字列で`も`アクセス
+```ruby
+test = {:key=>"value"}
+test['key'] # => nil
+test.with_indifferent_access['key'] # => value
+test.with_indifferent_access.except('key') # => {}
+```
+- `stringify_keys`: `{nil => nil, 1 => 1, a: :a}.stringify_keys`
+  - キーが重複している場合、最後に挿入された値
+  - `deep_stringify_keys`: 再起的に stringify_keys を行う `{nil => nil, 1 => 1, nested: {a: 3, 5 => 5}}.deep_stringify_keys`
+- `symbolize_keys`: レシーバのハッシュキーをシンボルに変換したハッシュを返す(別名 `to_options`)
+  - 数字や nil はシンボルに変換され無い
+  - `to_sym`: レシーバをシンボル化する `'hello'.to_sym # => "hello"`
+  - `deep_symbolize_keys`: 再起的に シンボル化する
+- `to_s`:
+```ruby
+(Date.today..Date.tomorrow).to_s
+# => "2009-10-25..2009-10-26"
+(Date.today..Date.tomorrow).to_s(:db) # db 形式に変換
+# => "BETWEEN '2009-10-25' AND '2009-10-26'"
+```
+- `Range#===メソッド、Range#include?メソッド、Range#cover?メソッド`: 与えられたインスタンスの範囲内に値が収まっているかどうかをチェックする
+```ruby
+(1..10) === (3..7)  # => true
+(1..10) === (0..7)  # => false
+
+(1..10).include?(3..7)  # => true
+(1..10).include?(0..7)  # => false
+
+(1..10).cover?(3..7)  # => true
+(1..10).cover?(0..7)  # => false
+```
+- `Range#overlaps?`: 与えられた2つの範囲に（空白でない）重なりがあるかどうかをチェック。 日付の差などに便利。
+- laravel の carbon のようなサービスは rails だと active support でデフォルトで用意している。
+ - 時を先に進める：`date.advane(yearhs:1, weeks: 2)`
+ - 時を遡る：`date.advance(months: -2, days: -2)`
+ - `ago`: 秒数で指定した分だけ遡る
+ - `since`: 秒数だけ先にすすむ
+ - `Marshal`: Ruby オブジェクトをファイル(または文字列)に書き出したり、読み戻したりする機能を提供するモジュール。大部分のクラスのインスタンスを書き出す事ができますが、書き出しの不可能なクラスも存在します(Marshal.#dump を参照)。ここで「`マーシャルデータ`」と言う用語は、`Marshal.#dump` が出力する文字列を指す。Python の pickle のようなモジュール。（pandas.to_pickle）
+ - `NameError の拡張`: `missing_name?`は、引数として渡された名前が原因で例外が発生するかどうかをテストするために使われる
+ - `LoadEror の拡張`: `is_missing?`は、パス名を引数に取り、特定のファイルが原因で例外が発生するかどうかをテストするために使われる
+ ```ruby
+ def default_helper_module!
+  module_name = name.sub(/Controller$/, '')
+  module_path = module_name.underscore
+  helper module_path
+rescue LoadError => e
+  raise e unless e.is_missing? "helpers/#{module_path}_helper"
+rescue NameError => e
+  raise e unless e.missing_name? "#{module_name}Helper"
+end
+ ```
+- `helper` class method: add Additional helpers to class(Controller) and let it use in erb. [ref](https://api.rubyonrails.org/classes/ActionController/Helpers.html)
+```ruby
+module FormattedTimeHelper
+  def format_time(time, format=:long, blank_message="&nbsp;")
+    time.blank? ? blank_message : time.to_s(format)
+  end
+end
+class EventsController < ActionController::Base
+  helper FormattedTimeHelper
+  def index
+    @events = Event.all
+  end
+end
+<% @events.each do |event| -%>
+  <p>
+    <%= format_time(event.time, :short, "N/A") %> | <%= event.name %>
+  </p>
+<% end -%>
+```
