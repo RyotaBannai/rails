@@ -47,6 +47,7 @@ class UsersController < ApplicationController
   def update
     respond_to do |format|
       if @user.update(user_params)
+        @user.avatar.attach(user_params[:avatar]) if user_params.has_key?(:avatar) # if there is no if conditional, this updates data even when param has no avatar key
         format.html do
           redirect_to @user, notice: 'User was successfully updated.'
         end
@@ -83,6 +84,6 @@ class UsersController < ApplicationController
   end
   # Only allow a list of trusted parameters through.
   def user_params
-    params.require(:user).permit(:name, :email)
+    params.require(:user).permit(:name, :email, :avatar)
   end
 end
