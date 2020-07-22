@@ -11,7 +11,9 @@ class UsersController < ApplicationController
 
   # GET /users/1
   # GET /users/1.json
-  def show; end
+  def show; 
+  #console # show console on the browser
+  end
 
   # GET /users/new
   def new
@@ -45,6 +47,8 @@ class UsersController < ApplicationController
   # PATCH/PUT /users/1
   # PATCH/PUT /users/1.json
   def update
+    # puts params.to_yaml 
+    #byebug
     respond_to do |format|
       if @user.update(user_params)
         @user.avatar.attach(user_params[:avatar]) if user_params.has_key?(:avatar) # if there is no if conditional, this updates data even when param has no avatar key
