@@ -15,6 +15,7 @@ node_modules/
 package-lock.json
 pkg/
 tmp/
+storage/
 log/
 playground/starter_app/db/test.*
 /yarn-error.log
