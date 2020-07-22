@@ -35,6 +35,7 @@
     - [form](#form)
 - [Active Support](#active-support)
     - [安全な文字列](#安全な文字列)
+- [Storage](#storage)
 
 <!-- /TOC -->
 
@@ -1592,3 +1593,26 @@ end
   </p>
 <% end -%>
 ```
+### Storage
+- `has_one_attached :avatar`だけで User record に画像を関連づけできる。
+- 既存ユーザーに attach: `Current.user.avatar.attach(params[:avatar])`
+- attach 済みかどうか検証: `Current.user.avatar.attached?`
+- `has_many_attached`で１対多の関係を設定。
+- `File/IO Objectsをアタッチ`: `オープン IO オブジェクトとファイル名を1つ以上含むハッシュを渡す` → `@message.image.attach(io: File.open('/path/to/file'), filename: 'file.pdf')`
+  - 可能であれば、`content_type:`も指定する。Active Storage は、渡されたデータからファイルの `content_type` の判定を試みるが、判定できない場合は content_type にフォールバックする。
+- `ファイルを削除`: `user.avatar.purge`
+- エンドポイントを base url にしたリンクを生成: `url_for(user.avatar)`
+- ダウンロードリンクを作成: `rails_blob_path(user.avatar, disposition: "attachment")`
+- コントローラやビューのコンテキストの外(バックグラウンドジョブやcronジョブなど)からリンクを作成したい場合: `Rails.application.routes.url_helpers.rails_blob_path(user.avatar, only_path: true)`
+- プレビュー画像の抽出にはサードパーティのアプリケーションが必要（動画の場合は `ffmpeg` 、PDF の場合は `mutool`）
+```ruby
+<ul>
+  <% @message.files.each do |file| %>
+    <li>
+      <%= image_tag file.preview(resize: "100x100>") %>
+    </li>
+  <% end %>
+</ul>
+```
+- Active Storage は、付属の JavaScript ライブラリを用いて、クライアントからクラウドへのダイレクトアップロードをサポートしている。
+- `システムテスト中に保存したファイルを破棄する`: システムテストでは、トランザクションをロールバックすることでテストデータをクリーンアップするが、destroy はオブジェクトに対して呼び出されないため、添付ファイルはそのままでは決してクリーンアップされ無い。 添付ファイルを破棄したい場合は、`after_teardown`コールバックで行える。
