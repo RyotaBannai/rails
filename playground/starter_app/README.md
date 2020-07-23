@@ -37,6 +37,7 @@
     - [安全な文字列](#安全な文字列)
 - [Storage](#storage)
 - [Command Line Tool](#command-line-tool)
+- [アセットパイプライン (Sprockets がファイルをまとめるまでの工程)](#アセットパイプライン-sprockets-がファイルをまとめるまでの工程)
 
 <!-- /TOC -->
 
@@ -984,6 +985,7 @@ json.email("alex@example.com")
   - `<% %>` タグはその中に書かれた Ruby コードを実行しますが、実行結果は出力されない。条件文やループ、ブロックなど出力の不要な行はこのタグの中に書く。
   - `<%= %> `タグでは実行結果がWebページに出力される。
   - Ruby でよく使用される print や puts のような通常の出力関数は ERB では使用できない。
+  - `%>` と `-%>` の違い: `-%>`は `trim_mode` で意図しない改行が挿入されたりすることを防ぐ。
 #### パーシャル (部分テンプレート)
 - コードを分割するための仕組み、使い回せるようにする仕組み
 - `パーシャルのファイル名`の先頭には`アンダースコア`を追加. (パーシャルファイルはフォームなど layout として使い回しができるファイルのことを言う)
@@ -1646,4 +1648,51 @@ end
     - アノテーションは`大文字小文字を区別`する点に注意
   - デフォルトディレクトリを追加: `config.annotations.register_directories`
   - デフォルトファイル拡張子を追加: `config.annotations.register_extensions`
-  
+### アセットパイプライン (Sprockets がファイルをまとめるまでの工程)
+- JavaScript や CSS のアセットを最小化 (minify: スペースや改行を詰めるなど) または圧縮して連結するためのフレームワーク
+- `app/assets/`:  css, js フォルダを作成して管理
+- `lib/assets/`: 1つのアプリケーションの範疇に収まらないライブラリのコードや、複数のアプリケーションで共有されるライブラリのコードを置く
+- `vendor/assets`: JavaScript プラグインや CSS フレームワークなど、外部の団体などによって所有されているアセットの置き場所
+- `Rails.application.config.assets.paths`: assets の path を探索
+    - 追加：`Rails.application.config.assets.paths << Rails.root.join("lib", "videoplayer", "flash")`
+- assets のリンクするコードをかく
+  - Rails から同梱されるようになった `turbolinks gem` を使用している場合、'data-turbolinks-track' オプションが利用できる。これはアセットが更新されてページに読み込まれたかどうかを turbolinks がチェックする。
+```ruby
+<%= stylesheet_link_tag "application", media: "all" %>
+<%= javascript_include_tag "application" %>
+# ↓
+<%= stylesheet_link_tag "application", media: "all", "data-turbolinks-track" => "reload" %>
+<%= javascript_include_tag "application", "data-turbolinks-track" => "reload" %>
+```
+- css アセットファイルに erb という拡張子を追加すると (`application.css.erb`など)、CSS ルール内で asset_path などのヘルパーが使用できるようになる
+```ruby
+.class { background-image: url(<%= asset_path 'image.png' %>) }
+```
+- `asset-url("rails.png")`は `url(/assets/rails.png)`に変換される
+- `asset-path("rails.png")`は `"/assets/rails.png"`に変換される
+- `ダイジェストをオフ`: `config.assets.digest = false`
+
+- フィンガープリントと注意点:
+> アセットファイル名で使用されるフィンガープリントは、アセットファイルの内容に応じて変わります。アセットファイルの内容が少しでも変わると、アセットファイル名も必ずそれに応じて変わります (訳注: MD5の性質により、異なるファイルからたまたま同じフィンガープリントが生成されることはほぼありません)。変更されていないファイルやめったに変更されないファイルがある場合、フィンガープリントも変化しないので、ファイルの内容が完全に同一であることが容易に確認できます。これはサーバーやデプロイ日が異なっていても有効です。アセットファイル名は内容が変わると必ず変化するので、CDN、ISP、ネットワーク機器、Webブラウザなどあらゆる場面で有効なキャッシュをHTTPヘッダに設定することができます。ファイルの内容が更新されると、フィンガープリントも更新されます。これにより、リモートクライアントは (訳注: 既存のキャッシュを使用せずに) コンテンツの新しいコピーをサーバーにリクエストします。この手法を一般に キャッシュ破棄 (cache busting) と呼びます。Sprocketsがフィンガープリントを使用する際には、ファイルの内容をハッシュ化したものをファイル名 (通常は末尾) に追加します。たとえば、global.cssというCSSファイル名は以下のようになります。
+`global-908e25f4bf641868d8683022a5b62f54.css` `global-＜Digest値＞.css`
+
+- 基本的に Webpack をラップした Webpacker を使うようにする。
+- エントリーファイルは app/javascript/packs におく
+  - Webpack によりそれぞれ 1 つのファイルにバンドルされる
+-　完全に Webpacker に移行できる場合は以下の gem は Webpack により置き換わるので不要となる。
+  - `closure-compiler`
+  - `uglifier`
+  - `yui-compressor`
+  - `sass-rails`
+- バンドルされたファイルと app/javascript/images 等に配置されたファイルは静的ファイルとしてブラウザからアクセスできるパスに配置される
+  - development 環境で `rails s` した場合は必要に応じてバンドル処理が実行される
+  - 明示的に `rails webpacker:compile` を実行(`rails assets:precompile` を実行すると続いて実行される)
+  - /packs/application-＜Digest値＞.js 等でアクセスできる
+- `javascripts/packs/application.js` に書かれた require はファイル内容がそのまま展開されずに Webpack によりバンドルされるため var が競合しない
+- HTML タグを埋め込むための`ヘルパーメソッド`がある
+  - JavaScript 用の `<%= javascript_pack_tag 'MODULE_NAME' %>` を使うと `<script /> タグ`が生成される
+  - CSS 用の `<%= stylesheet_pack_tag 'MODULE_NAME' %>` を使うと `<link /> タグ`が生成される
+- バンドルしたファイルへのパスはヘルパーメソッドがある
+  - `asset_pack_path(＜アセットファイル名＞)` により取得できる
+- [ref](https://qiita.com/tatsurou313/items/645cbf0a3af4c673b5df)
+- `Webpacker で取り扱えるファイルの拡張子を増やす` Webpack のローダを設定することにより `.js.erb` のような ERB テンプレートや、`.vue` のような Vue.js ファイルを読み込むこともできる。ERB テンプレートを読み込めるようにする場合は `rails webpacker:install:erb` を実行すれば Webpack の loader がインストールされ、Webpack の設定が更新される。[ref](https://github.com/rails/webpacker#erb)
