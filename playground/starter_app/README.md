@@ -36,6 +36,7 @@
 - [Active Support](#active-support)
     - [安全な文字列](#安全な文字列)
 - [Storage](#storage)
+- [Command Line Tool](#command-line-tool)
 
 <!-- /TOC -->
 
@@ -1618,3 +1619,31 @@ end
 - `システムテスト中に保存したファイルを破棄する`: システムテストでは、トランザクションをロールバックすることでテストデータをクリーンアップするが、destroy はオブジェクトに対して呼び出されないため、添付ファイルはそのままでは決してクリーンアップされ無い。 添付ファイルを破棄したい場合は、`after_teardown`コールバックで行える。
 - `メモリーリークのデバッグ`:
   - `Valgrind` はアプリケーションであり、Cコードベースのメモリーリークや競合状態の検出
+
+### Command Line Tool
+- `rails server`:
+  - `-e` オプションでサーバーの環境を変更。デフォルトは `development` (開発) 環境
+  - `-b` オプション: Rails を特定の IP にバインド。デフォルトは `localhost`
+  - `-d` オプションを使うと、デーモンとしてサーバーを起動
+
+> 単体テスト（unit test）について説明します。単体テストとは、コードをテストしてアサーション（コードが期待どおりに動作するかどうかを確認すること）を行うコードです。単体テストでは、モデルのメソッドといったコードの一部分を取り出して、入力と出力をテストします。単体テストはあなたにとって友人と同じぐらい大事なものです。単体テストを書けば人生が幸福で満たされるという事実に早いうちから気づいた人は、間違いなく他人より先に幸せになれるでしょう。単体テストについて詳しくは、the testing guide を参照してください。
+
+- `rails console`:
+  - `rails console --sandbox`: `--sandbox`を付ければ db のデータを変更しても exit 時に rollback する。
+  - `appオブジェクトとhelperオブジェクト`: 
+    - `app.root_path`
+    - `helper.time_ago_in_words 30.days.ago`
+  - `rails dbconsole`(rails db): app で使用している db へ直接接続
+  - `rails runner`: 非対話的に Rails の文脈で Ruby のコードを実行 `rails runner "Model.long_running_method"`
+    - ファイル内の Ruby コードを runner で実行することもでき `rails runner lib/code_to_be_run.rb`
+- `rails destroy`: generate のちょうど反対
+- `rails assets`: precompile, clean, clobber などのオプションがある。
+- `rails notes`: コードのコメントから `FIXME`、`OPTIMIZE`、`TODO`で始まる行を探し出して表示。 
+  - `[FIXME]`のように`[`から始まるものはヒットし無い
+  - 検索対象となるファイルの拡張子は `.builder、.rb、.rake、.yml、.yaml、.ruby、.css、.js、.erb`
+  - デフォルトのアノテーション以外に独自のアノテーションも利用できる
+    - `--annotations` 引数を用いて、特定のアノテーションを渡す
+    - アノテーションは`大文字小文字を区別`する点に注意
+  - デフォルトディレクトリを追加: `config.annotations.register_directories`
+  - デフォルトファイル拡張子を追加: `config.annotations.register_extensions`
+  

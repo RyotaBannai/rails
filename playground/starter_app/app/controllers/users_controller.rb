@@ -11,8 +11,9 @@ class UsersController < ApplicationController
 
   # GET /users/1
   # GET /users/1.json
-  def show; 
-  #console # show console on the browser
+  def show
+    # OPTIMIZE 
+    #console # show console on the browser
   end
 
   # GET /users/new
