@@ -38,6 +38,7 @@
 - [Storage](#storage)
 - [Command Line Tool](#command-line-tool)
 - [アセットパイプライン (Sprockets がファイルをまとめるまでの工程)](#アセットパイプライン-sprockets-がファイルをまとめるまでの工程)
+    - [Autoload](#autoload)
 
 <!-- /TOC -->
 
@@ -1696,3 +1697,56 @@ end
   - `asset_pack_path(＜アセットファイル名＞)` により取得できる
 - [ref](https://qiita.com/tatsurou313/items/645cbf0a3af4c673b5df)
 - `Webpacker で取り扱えるファイルの拡張子を増やす` Webpack のローダを設定することにより `.js.erb` のような ERB テンプレートや、`.vue` のような Vue.js ファイルを読み込むこともできる。ERB テンプレートを読み込めるようにする場合は `rails webpacker:install:erb` を実行すれば Webpack の loader がインストールされ、Webpack の設定が更新される。[ref](https://github.com/rails/webpacker#erb)
+
+#### Autoload
+- 通常の Rails アプリケーションで `require` 呼び出しを行うのは、`lib`ディレクトリにあるものや、`Ruby`標準ライブラリ、`Ruby gem`である。
+- `Zeitwerkモードを有効化`:  Rails 6 以上ではデフォルト
+  - `zeitwerk モード の Rails`は、内部で自動読み込み、再読み込み、eager loading に Zeitwerk を用いる
+  - Rails は、`プロジェクトを管理する専用の Zeitwerk インスタンス`のインスタンス化や設定を行う
+    - アプリを管理するZeitwerkのインスタンス: `Rails.autoloaders.main` で取得
+    - zeitwerkモードが有効かどうか: `Rails.autoloaders.zeitwerk_enabled?`
+```ruby
+# config/application.rb
+config.load_defaults "6.0" # CRubyでzeitwerkモードが有効になる
+```
+- Rails アプリケーションで使うファイル名は、そこで定義されている定数名と一致しなければならない
+  - たとえば、`app/helpers/users_helper.rb`ファイルでは`UsersHelper`を定義すべき
+  - `app/controllers/admin/payments_controller.rb`では`Admin::PaymentsController`を定義すべき
+  - Railsは、ファイル名を`String#camelize`で活用するよう`Zeitwerk`を設定
+    - たとえば、`app/controllers/users_controller.rb`は、以下のために`UsersController`という`定数`を定義 `"users_controller".camelize # => UsersController`
+- `自動読み込みパス（autoload path）`: その中身が自動読み込みの対象となるアプリケーションディレクトリを指す（app/modelsなど）
+  - これらのディレクトリはルート名前空間 Object を表す
+  - Zeitwerk のドキュメントでは `自動読み込みのパス` を`ルートディレクトリ`と呼んでいる
+  - `app/helpers/users_helper.rb`に`UsersHelper`が実装されていれば、そのモジュールは以下のように自動読み込み可能になる。したがって require 呼び出しは不要
+  - `自動読み込みパス`は、`app`の下のあらゆる`カスタムディレクトリ`を自動的に扱う
+    - たとえば、アプリケーションに`app/presenters`や`app/services`があれば、自動読み込みパスに追加される
+- `再読み込み`: Rails アプリケーションのファイルが変更されると、クラスやモジュールを自動的に再読み込みする
+  - 正確に言うと、Web サーバーが実行中の状態でアプリケーションのファイルが変更されると、Rails は次のリクエストが処理される直前にすべての定数をアンロードする。これによって、アプリケーションでリクエスト継続中に使われるクラスやモジュールが自動読み込みされるようになり、続いてファイルシステム上の現在の実装が反映される。
+  - Rails コンソールでは、 `config.cache_classes`の値にかかわらずファイルウォッチャーは動作し無い。通常、コンソールセッションの最中に再読み込みが行われると混乱を招く可能性があるので、アプリケーションのクラスやモジュールは変更されない一貫した状態で個別のリクエストを提供することが一般に望まれる。ただし、`reload!`を実行することで強制的に再読み込みできる。
+- `トラブルシューティング`: 
+  - `config/application.rb` に `Rails.autoloaders.log!` を追加すると、標準出力にトレースが出力される。
+  - ファイルに出力したい場合は、`Rails.autoloaders.logger = Logger.new("#{Rails.root}/log/autoloading.log")` とする。Rails ロガーは`config/application.rb`には設定されて無いが、`イニシャライザ`で設定されている（`config/initializers/log_autoloaders.rb`）
+- `STI(単一テーブル継承)`
+  - 単一テーブル継承機能は、`lazy loading`との相性があまりよく無い。一般に単一テーブル継承の API が正しく動作するには、`STI 階層`を正しく列挙できる必要があるため。`lazy loading`では、クラスが参照されるまでクラス読み込みは遅延される → まだ参照されていないものは列挙できない。→ アプリケーションは STI階層 を読み込みモードにかかわらず`eager load`する必要がある。
+  - [STI（単一テーブル継承）とメタプログラミングでDRY](https://qiita.com/kidach1/items/789c2e7aebbcfbd2583e#cntroller%E3%81%AE%E5%AE%9F%E8%A3%85%E3%81%A8%E3%83%A1%E3%82%BF%E3%83%97%E3%83%AD%E3%82%B0%E3%83%A9%E3%83%9F%E3%83%B3%E3%82%B0)
+  - [send メソッドのいろいろな書き方](https://qiita.com/ngron/items/05d3a9624c2c3ec5dbb6)
+  - `instance_variable_set`, `instance_variable_get`: インスタンスにインスタンス変数をセット、ゲット [ref](https://docs.ruby-lang.org/ja/latest/method/Object/i/instance_variable_set.html)
+  - `const_get`: クラスに継承または宣言された定数を参照 [ref](https://docs.ruby-lang.org/ja/latest/method/Module/i/const_get.html)
+```ruby
+module Bar
+  BAR = 1
+end
+class Object
+  include Bar
+end
+p Object.const_get(:BAR)   # => 1 # Object では include されたモジュールに定義された定数を見付ける
+# 定義されていない定数
+p Baz.const_get(:NOT_DEFINED) #=> raise NameError
+# 第二引数に false を指定すると自分自身に定義された定数から探す !!!
+p Baz.const_get(:BAR, false) #=> raise NameError
+# 完全修飾名を指定すると include や自分自身へ定義されていない場合でも参照できる
+p Class.const_get("Bar::BAR") # => 1
+```
+- Rails で `self.class.const_get("User")` として、定数名を渡すと`クラスオブジェクト`を呼び出すことができる
+  - `self.class.const_get("User").new` new で新しいレコードを作成
+  - 文字列に対して、`constantize` を実行することでクラスオブジェクトを得られる (`ref → L:1457`)
