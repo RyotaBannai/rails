@@ -2,45 +2,47 @@
 
 <!-- TOC -->
 
-- [TOC](#toc)
-- [Many things..](#many-things)
-- [Controller](#controller)
-    - [パラメータの基本ルール:](#パラメータの基本ルール)
-    - [Route](#route)
-- [Model](#model)
-    - [validation](#validation)
-        - [条件付きバリデーション](#条件付きバリデーション)
-        - [error message](#error-message)
-    - [callback](#callback)
-        - [コールバックをスキップ](#コールバックをスキップ)
-    - [Association](#association)
-    - [ヒントと注意事項](#ヒントと注意事項)
-        - [関連付けの詳細情報](#関連付けの詳細情報)
-    - [クエリーインターフェース](#クエリーインターフェース)
-        - [レコードを更新できないようロックする](#レコードを更新できないようロックする)
-        - [結合](#結合)
-        - [スコープ](#スコープ)
-        - [Other things](#other-things)
-    - [Connect multiple dbs](#connect-multiple-dbs)
-    - [Active Model](#active-model)
-- [Action View](#action-view)
-    - [テンプレート](#テンプレート)
-    - [パーシャル (部分テンプレート)](#パーシャル-部分テンプレート)
-    - [ビューのパス](#ビューのパス)
-    - [Helpers](#helpers)
-    - [FormHelper](#formhelper)
-    - [FormTagHelper](#formtaghelper)
-    - [ローカライズされたビュー](#ローカライズされたビュー)
-    - [render, rendering](#render-rendering)
-    - [form](#form)
-- [Active Support](#active-support)
-    - [安全な文字列](#安全な文字列)
-- [Storage](#storage)
-- [Command Line Tool](#command-line-tool)
-- [アセットパイプライン (Sprockets がファイルをまとめるまでの工程)](#アセットパイプライン-sprockets-がファイルをまとめるまでの工程)
-    - [Autoload](#autoload)
-- [Cache: how to cache view template and records for better performance](#cache-how-to-cache-view-template-and-records-for-better-performance)
-- [Instrumentation API](#instrumentation-api)
+        - [TOC](#toc)
+        - [Many things..](#many-things)
+        - [Controller](#controller)
+            - [パラメータの基本ルール:](#パラメータの基本ルール)
+            - [Route](#route)
+        - [Model](#model)
+            - [validation](#validation)
+                - [条件付きバリデーション](#条件付きバリデーション)
+                - [error message](#error-message)
+            - [callback](#callback)
+                - [コールバックをスキップ](#コールバックをスキップ)
+            - [Association](#association)
+            - [ヒントと注意事項](#ヒントと注意事項)
+                - [関連付けの詳細情報](#関連付けの詳細情報)
+            - [クエリーインターフェース](#クエリーインターフェース)
+                - [レコードを更新できないようロックする](#レコードを更新できないようロックする)
+                - [結合](#結合)
+                - [スコープ](#スコープ)
+                - [Other things](#other-things)
+            - [Connect multiple dbs](#connect-multiple-dbs)
+            - [Active Model](#active-model)
+        - [Action View](#action-view)
+            - [テンプレート](#テンプレート)
+            - [パーシャル (部分テンプレート)](#パーシャル-部分テンプレート)
+            - [ビューのパス](#ビューのパス)
+            - [Helpers](#helpers)
+            - [FormHelper](#formhelper)
+            - [FormTagHelper](#formtaghelper)
+            - [ローカライズされたビュー](#ローカライズされたビュー)
+            - [render, rendering](#render-rendering)
+            - [form](#form)
+        - [Active Support](#active-support)
+            - [安全な文字列](#安全な文字列)
+        - [Storage](#storage)
+        - [Command Line Tool](#command-line-tool)
+        - [アセットパイプライン (Sprockets がファイルをまとめるまでの工程)](#アセットパイプライン-sprockets-がファイルをまとめるまでの工程)
+            - [Autoload](#autoload)
+        - [Cache: how to cache view template and records for better performance](#cache-how-to-cache-view-template-and-records-for-better-performance)
+        - [Instrumentation API](#instrumentation-api)
+        - [Rails を API として使う](#rails-を-api-として使う)
+- [Nginx](#nginx)
 
 <!-- /TOC -->
 
@@ -1785,3 +1787,41 @@ p Class.const_get("Bar::BAR") # => 1
 - [オブジェクト同士の繋り](https://gist.github.com/eiel/7177959):
   - 通知はオブジェクト同士がメッセージのやりとりをするために使う
   - 繋りをすごく緩くしたい時に便利な機能
+### Rails を API として使う
+- `API 専用 Rails アプリケーションの生成`: `rails new my_api --api`
+  - 利用するミドルウェアを`通常よりも絞り込んで`アプリケーションを起動するよう設定。特に、ブラウザ向けアプリケーションで有用なミドルウェア（cookiesのサポートなど）を一切利用しない
+    - `rails middleware`：アプリケーションの全ミドルウェアを表示
+  - `ApplicationController`を、通常の`ActionController::Base`の代わりに`ActionController::API`から継承
+  - ミドルウェアと同様、`Action Controller`モジュールのうち、ブラウザ向けアプリケーションでしか使われないモジュールをすべて除外します。
+  - `ビュー、ヘルパー、アセット`を生成しないようジェネレーターを設定
+- `既存アプリケーションを API 専用に変更`: 
+  - `config/application.rbのApplication`クラス定義の冒頭に、`config.api_only = true` を追加
+- エラーの表示方法を指定:
+  - development モードでのエラー発生時にレスポンスで使う形式を設定するには、`config/environments/development.rb`ファイルで`config.debug_exception_response_format`を設定
+    - `config.api_only`を`true`に設定 → `config.debug_exception_response_format` はデフォルトで `:api`
+    - `:default`: HTML ページにデバッグ情報を表示 (`config.debug_exception_response_format = :default`)
+    - `:api`: レスポンスの形式を保ったままデバッグ情報を表示 (`config.debug_exception_response_format = :api`)
+- `キャッシュミドルウェアを使う`: 
+  - `stale?`呼び出しは、リクエストにある`If-Modified-Since`ヘッダと`@post.updated_at`を比較。ヘッダが最終更新時より新しい場合、`「304 Not Modified」`を返すか、レスポンスをレンダリングして`Last-Modified`ヘッダをそこに表示する。
+  - `クロスクライアントキャッシュ`: キャッシュミドルウェアがあると`クライアント間`でこのキャッシュを共有できるようになる。stale?の呼び出し時に option の `public: true` を追加することで有効にできる。
+```ruby
+def show
+  @post = Post.find(params[:id])
+  if stale?(last_modified: @post.updated_at)
+    render json: @post
+  end
+end
+```
+- `X-Sendfile`: NGINX のドキュメントによると「認証、ロギングなどをバックエンドで処理した後、内部リダイレクトされた場所からエンドユーザにコンテンツを配信するように`Webサーバが`処理することで、`バックエンドを解放`して他の要求を処理させる仕組み」である。Web　サーバにコンテンツ配信をさせ、`バックエンドのスループットを向上させる`ための機能、ということ
+ - 不特定多数に公開しないコンテンツなので `X-Sendfile` を使う（誰にでも公開できるファイルならリダイレクトでいい）[ref](https://nacl-ltd.github.io/2017/01/07/aws-s3-file-download.html#:~:text=X%2DSendfile%E3%81%A8%E3%81%AF%E3%80%81NGINX,%E3%81%95%E3%81%9B%E3%82%8B%E4%BB%95%E7%B5%84%E3%81%BF%E3%80%8D%E3%81%A0%E3%81%9D%E3%81%86%E3%81%A7%E3%81%99%E3%80%82)
+ - 定番のサーバーでファイル送信アクセラレーションを有効にするには、ヘッダに次のような値を設定
+ ```ruby
+ # Apacheやlighttpd
+config.action_dispatch.x_sendfile_header = "X-Sendfile"
+# Nginx
+config.action_dispatch.x_sendfile_header = "X-Accel-Redirect"
+ ```
+- `ActionDispatch::Request#params`は、クライアントからのパラメータを `JSON 形式`で受け取り、コントローラ内部の `params`でアクセスできるようにする。
+  - JSON エンコード化したパラメータをクライアントから送信し、`Content-Type`に `application/json`を指定
+- [APIクライアントになる場合に便利なミドルウェア](https://railsguides.jp/api_app.html#%E3%81%9D%E3%81%AE%E4%BB%96%E3%81%AE%E3%83%9F%E3%83%89%E3%83%AB%E3%82%A6%E3%82%A7%E3%82%A2)
+- [`rescue_from` による例外処理：アプリ固有のエラーハンドリングとエラーページ表示](https://qiita.com/E-46/items/03c30c2d37aae3756ecc)
