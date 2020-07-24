@@ -39,7 +39,8 @@
 - [Command Line Tool](#command-line-tool)
 - [アセットパイプライン (Sprockets がファイルをまとめるまでの工程)](#アセットパイプライン-sprockets-がファイルをまとめるまでの工程)
     - [Autoload](#autoload)
-- [Cache](#cache)
+- [Cache: how to cache view template and records for better performance](#cache-how-to-cache-view-template-and-records-for-better-performance)
+- [Instrumentation API](#instrumentation-api)
 
 <!-- /TOC -->
 
@@ -1777,3 +1778,10 @@ p Class.const_get("Bar::BAR") # => 1
       - 関連モデルが更新されても ファイルが直接依存しているレコードではないため、update_at timestamp はそのまま。つまりアプリケーションは古いデータを返す。これを修正したい場合はk関連モデルが更新された時に、touch をしてモデル同士を結びづける。`belongs_to :product, touch: true`
 - `コレクションキャッシュ`: render ヘルパーでは、コレクションを指定して個別のテンプレートをレンダリングするときにもキャッシュを利用できる。
   - 前回までにレンダリングされた全`キャッシュテンプレート`を一括で読み出し: `<%= render partial: 'products/product', collection: @products, cached: true %>` → 劇的に速度が向上
+### Instrumentation API
+- Active Supportに 含まれている Instrumentation API は、Ruby コードで発生する特定の動作の計測に利用できる
+- この API をアプリケーションで実装すると、アプリケーション（または Ruby コード片）内部でイベントが発生したときに通知を受け取れるよう他の開発者が設定できる
+- たとえば Active Record には、データベースへの SQL クエリが発行されるたびに呼び出されるフックが用意されている。このフックを`サブスクライブ（購読）`すると、特定のアクションでのクエリ実行数を追跡できる。
+- [オブジェクト同士の繋り](https://gist.github.com/eiel/7177959):
+  - 通知はオブジェクト同士がメッセージのやりとりをするために使う
+  - 繋りをすごく緩くしたい時に便利な機能
